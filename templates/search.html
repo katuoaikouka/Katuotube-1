@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}「{{ query }}」の検索結果 - かつおTube{% endblock %}
+
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto;">
+    <h3 style="margin-bottom: 20px; color: #0f0f0f; font-size: 1.2rem;">
+        <i class="fas fa-search"></i> 「{{ query }}」の検索結果
+    </h3>
+
+    <div class="search-list">
+        {% for item in results %}
+            {% if item.type == 'video' %}
+            <a href="/watch?v={{ item.videoId }}" class="search-item">
+                <div class="search-thumb">
+                    <img src="/proxy/thumb?v={{ item.videoId }}" alt="{{ item.title }}" loading="lazy">
+                    <span class="duration">{{ item.lengthSeconds | default('0:00', true) }}</span>
+                </div>
+                <div class="search-info">
+                    <h4 class="title">{{ item.title }}</h4>
+                    <p class="meta">{{ item.author }} • {{ item.viewCountText }} • {{ item.publishedText }}</p>
+                    <p class="desc">{{ item.descriptionSnippet }}</p>
+                </div>
+            </a>
+            {% endif %}
+        {% else %}
+            <div style="text-align: center; padding: 50px;">
+                <p>動画が見つかりませんでした。別のキーワードを試してみてください。🐟</p>
+                <a href="/" style="color: var(--main);">ホームに戻る</a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .search-list { display: flex; flex-direction: column; gap: 16px; }
+    .search-item { 
+        display: flex; 
+        gap: 16px; 
+        text-decoration: none; 
+        color: inherit; 
+        padding: 8px;
+        border-radius: 12px;
+        transition: background 0.2s;
+    }
+    .search-item:hover { background: #f2f2f2; }
+    
+    .search-thumb { position: relative; flex: 0 0 240px; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; background: #eee; }
+    .search-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .duration { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 2px 4px; border-radius: 4px; font-size: 0.75rem; }
+    
+    .search-info { flex: 1; }
+    .search-info .title { margin: 0 0 4px 0; font-size: 1.1rem; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .search-info .meta { font-size: 0.8rem; color: #606060; margin-bottom: 8px; }
+    .search-info .desc { font-size: 0.8rem; color: #606060; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    @media (max-width: 650px) {
+        .search-item { flex-direction: column; }
+        .search-thumb { flex: 0 0 auto; width: 100%; }
+    }
+</style>
+{% endblock %}
