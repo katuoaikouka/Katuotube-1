@@ -25,10 +25,32 @@
       padding: 20px;
       position: relative;
     }
+    /* スコアと戻るボタンのコンテナ */
+    #header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
     #score {
       font-size: 24px;
-      margin-bottom: 15px;
       color: #776e65;
+      font-weight: bold;
+    }
+    /* 青い四角の戻るボタン */
+    #backBtn {
+      padding: 10px 15px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    #backBtn:hover {
+      background-color: #0056b3;
     }
     /* 4x4 のグリッド構造 */
     .grid {
@@ -115,12 +137,19 @@
         font-size: 16px;
         padding: 8px 16px;
       }
+      #backBtn {
+        font-size: 14px;
+        padding: 8px 12px;
+      }
     }
   </style>
 </head>
 <body>
   <div id="game-container">
-    <div id="score">Score: 0</div>
+    <div id="header-container">
+      <div id="score">Score: 0</div>
+      <a href="game.html" id="backBtn">戻る</a>
+    </div>
     <div class="grid" id="grid"></div>
     <div id="game-over-overlay">
       Game Over
@@ -467,6 +496,5 @@
     // ゲーム開始
     initGame();
   </script>
-  <script src="//accaii.com/yuto110/script.js" async></script><noscript><img src="//accaii.com/yuto110/script?guid=on"></noscript>
 </body>
-  </html>
+</html>
