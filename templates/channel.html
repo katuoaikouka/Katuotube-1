@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* チャンネル専用の追加スタイル */
+    .channel-wrapper {
+        max-width: 1284px;
+        margin: -20px auto 0 auto; /* mainのpaddingを打ち消して上部に密着 */
+        background: var(--bg);
+    }
+
+    /* バナー領域 */
+    .channel-banner {
+        width: 100%;
+        aspect-ratio: 6 / 1;
+        object-fit: cover;
+        background: #e0e0e0;
+        display: block;
+    }
+
+    /* チャンネル基本情報 */
+    .channel-header-info {
+        display: flex;
+        padding: 32px 16px;
+        gap: 24px;
+        align-items: center;
+    }
+
+    .channel-avatar {
+        width: 128px;
+        height: 128px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .channel-text h1 {
+        margin: 0 0 4px 0;
+        font-size: 2.2rem;
+        font-weight: 700;
+    }
+
+    .channel-stats {
+        color: #606060;
+        font-size: 0.9rem;
+        margin-bottom: 12px;
+    }
+    [data-theme="dark"] .channel-stats { color: #aaa; }
+
+    /* タブ風の区切り */
+    .channel-tabs {
+        border-bottom: 1px solid #e5e5e5;
+        margin: 0 16px 20px 16px;
+        padding-bottom: 10px;
+    }
+    [data-theme="dark"] .channel-tabs { border-color: #333; }
+    
+    .tab-active {
+        display: inline-block;
+        font-weight: bold;
+        border-bottom: 3px solid #0f0f0f;
+        padding-bottom: 10px;
+        margin-bottom: -11px;
+    }
+    [data-theme="dark"] .tab-active { border-color: #f1f1f1; }
+
+    /* 動画グリッド（バーなし・動画のみ） */
+    .video-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+        padding: 0 16px 40px 16px;
+    }
+
+    .video-card {
+        text-decoration: none;
+        color: var(--text);
+        display: block;
+    }
+
+    .thumb-wrapper {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #ccc;
+        position: relative;
+    }
+
+    .thumb-wrapper img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: 0.2s;
+    }
+
+    .video-card:hover .thumb-wrapper img {
+        transform: scale(1.02);
+        border-radius: 0;
+    }
+
+    .video-info {
+        padding: 12px 0;
+    }
+
+    .video-title {
+        font-weight: 600;
+        font-size: 1rem;
+        line-height: 1.4;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .video-meta {
+        font-size: 0.85rem;
+        color: #606060;
+    }
+    [data-theme="dark"] .video-meta { color: #aaa; }
+
+    @media (max-width: 768px) {
+        .channel-header-info { flex-direction: column; text-align: center; }
+        .channel-avatar { width: 80px; height: 80px; }
+        .channel-text h1 { font-size: 1.5rem; }
+    }
+</style>
+
+<div class="channel-wrapper">
+    {% if channel.authorBanners %}
+        <img src="{{ channel.authorBanners[0].url }}" class="channel-banner" alt="banner">
+    {% else %}
+        <div class="channel-banner"></div>
+    {% endif %}
+
+    <div class="channel-header-info">
+        <img src="{{ channel.authorThumbnails[-1].url }}" class="channel-avatar" alt="avatar">
+        <div class="channel-text">
+            <h1>{{ channel.author }}</h1>
+            <div class="channel-stats">
+                <span>{{ channel.subCountText or '---' }} 登録者</span> • 
+                <span>{{ channel.videoCount or '0' }} 本の動画</span>
+            </div>
+            <div class="video-meta" style="max-width: 600px;">
+                {{ channel.description[:150] }}...
+            </div>
+        </div>
+    </div>
+
+    <div class="channel-tabs">
+        <div class="tab-active">動画</div>
+    </div>
+
+    <div class="video-grid">
+        {% for video in videos %}
+        <a href="/watch?v={{ video.videoId }}" class="video-card">
+            <div class="thumb-wrapper">
+                <img src="/proxy/thumb?v={{ video.videoId }}" loading="lazy">
+            </div>
+            <div class="video-info">
+                <div class="video-title">{{ video.title }}</div>
+                <div class="video-meta">
+                    {{ video.viewCountText }} • {{ video.publishedText }}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
