@@ -552,6 +552,11 @@ def faq():
 def bbs():
     return render_template('bbs.html')
 
+@app.route('/snow2.html')
+@login_required
+def snow2():
+    return render_template('snow2.html)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
