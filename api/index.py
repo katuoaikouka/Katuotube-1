@@ -214,7 +214,7 @@ def index():
         if res.status_code == 200:
             videos = res.json()
     except Exception:
-        # 取得失敗時は次のステップへ
+        # 取得失敗時はログを出さずに次へ（爆速化のため）
         pass
 
     # 2. GitHubが失敗した場合、またはデータが空の場合のみ、従来のInvidious APIを使用
