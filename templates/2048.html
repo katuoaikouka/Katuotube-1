@@ -36,6 +36,8 @@
       font-size: 24px;
       color: #776e65;
       font-weight: bold;
+      cursor: pointer; /* クリック可能であることを示す */
+      user-select: none; /* テキスト選択を防止 */
     }
     /* 青い四角の戻るボタン */
     #backBtn {
@@ -232,9 +234,6 @@
     }
 
     // 盤面の状態に合わせてセルを再描画します。
-    // また、直前の移動方向 (lastMove) に応じて、各タイルに
-    // 初期の transform を与え、setTimeout で解除することで
-    // CSS transition によるスライドアニメーションを実現します。
     function renderBoard() {
       const grid = document.getElementById("grid");
       grid.innerHTML = "";
@@ -259,7 +258,6 @@
                 tile.style.transform = "translateY(-20px)";
               }
               // ごく短いタイミングで transform をリセットし
-              // CSS transition により滑らかに 0 へアニメーション
               setTimeout(() => {
                 tile.style.transform = "";
               }, 20);
@@ -278,7 +276,7 @@
       return a.every((val, index) => val === b[index]);
     }
 
-    // ゲームオーバー判定：盤面に空セルがなく、いずれの方向にも合体可能なタイルがなければ
+    // ゲームオーバー判定
     function checkGameOver() {
       for (let r = 0; r < 4; r++) {
         for (let c = 0; c < 4; c++) {
@@ -302,15 +300,13 @@
     function moveLeft() {
       let moved = false;
       for (let r = 0; r < 4; r++) {
-        // 0 以外の値だけに絞る
         let row = board[r].filter(num => num !== 0);
-        // 隣接同値の合体
         for (let i = 0; i < row.length - 1; i++) {
           if (row[i] === row[i + 1]) {
             row[i] *= 2;
             score += row[i];
             row[i + 1] = 0;
-            i++; // 合体済みのためスキップ
+            i++;
           }
         }
         row = row.filter(num => num !== 0);
@@ -449,26 +445,18 @@
       }
     }
 
-    // キーボードでの操作（ゲームオーバー時は無効）
+    // キーボード操作
     document.addEventListener("keydown", function(event) {
       if (gameOver) return;
       switch (event.key) {
-        case "ArrowLeft":
-          moveLeft();
-          break;
-        case "ArrowRight":
-          moveRight();
-          break;
-        case "ArrowUp":
-          moveUp();
-          break;
-        case "ArrowDown":
-          moveDown();
-          break;
+        case "ArrowLeft": moveLeft(); break;
+        case "ArrowRight": moveRight(); break;
+        case "ArrowUp": moveUp(); break;
+        case "ArrowDown": moveDown(); break;
       }
     });
 
-    // タッチ操作（スマホ・タブレット用）でスワイプ検出
+    // タッチ操作
     document.addEventListener("touchstart", function(e) {
       if (gameOver) return;
       touchStartX = e.touches[0].clientX;
@@ -491,6 +479,39 @@
 
     document.getElementById("restartBtn").addEventListener("click", function() {
       initGame();
+    });
+
+    // --- チート機能: Scoreを3回クリックすると全最小タイルが2倍になる ---
+    let clickCount = 0;
+    let lastClickTime = 0;
+    document.getElementById("score").addEventListener("click", function() {
+      const now = Date.now();
+      if (now - lastClickTime < 500) {
+        clickCount++;
+      } else {
+        clickCount = 1;
+      }
+      lastClickTime = now;
+
+      if (clickCount === 3) {
+        // 盤面上の最小値（0以外）を見つける
+        let minVal = Infinity;
+        for(let r=0; r<4; r++){
+          for(let c=0; c<4; c++){
+            if(board[r][c] > 0 && board[r][c] < minVal) minVal = board[r][c];
+          }
+        }
+        // 最小値タイルをすべて2倍にする
+        if(minVal !== Infinity) {
+          for(let r=0; r<4; r++){
+            for(let c=0; c<4; c++){
+              if(board[r][c] === minVal) board[r][c] *= 2;
+            }
+          }
+          renderBoard();
+        }
+        clickCount = 0;
+      }
     });
 
     // ゲーム開始
