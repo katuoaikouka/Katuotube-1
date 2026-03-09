@@ -171,7 +171,10 @@
         const saveHistory = localStorage.getItem('save_history') !== 'disabled';
         document.getElementById('save-history-toggle').checked = saveHistory;
 
-        const playerMode = localStorage.getItem('player_mode') || 'hls';
+        // Cookieから現在の設定を読み取ってセレクトボックスに反映
+        const cookies = document.cookie.split('; ');
+        const playerModeCookie = cookies.find(row => row.startsWith('player_mode='));
+        const playerMode = playerModeCookie ? playerModeCookie.split('=')[1] : (localStorage.getItem('player_mode') || 'hls');
         document.getElementById('player-mode-select').value = playerMode;
     };
 
@@ -189,6 +192,7 @@
     function updatePlayerMode() {
         const mode = document.getElementById('player-mode-select').value;
         localStorage.setItem('player_mode', mode);
+        // 重要: path=/ を指定してドメイン全体でCookieを有効にする
         document.cookie = "player_mode=" + mode + ";path=/;max-age=31536000";
     }
 
