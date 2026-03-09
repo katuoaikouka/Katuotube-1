@@ -1,0 +1,15 @@
+{
+  "setupTasks": [
+    {
+      "name": "Install Dependencies",
+      "command": "pip install -r requirements.txt"
+    }
+  ],
+  "tasks": {
+    "run-flask": {
+      "name": "Run Flask Server",
+      "command": "python main.py",
+      "runAtStart": true
+    }
+  }
+}
