@@ -508,7 +508,7 @@ def high_quality_watch():
     # HLS(m3u8)の取得ロジック
     m3u8_url = None
     try:
-        hls_res = requests.get(f"https://yudlp.vercel.app/m3u8/{v_id}", timeout=10)
+        hls_res = requests.get(f"https://yudlp.vercel.app/stream/{v_id}", timeout=10)
         hls_data = hls_res.json()
         m3u8_formats = hls_data.get("m3u8_formats", [])
         if m3u8_formats:
