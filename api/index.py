@@ -241,40 +241,55 @@ def search():
     theme = request.cookies.get('theme', 'dark')
     return render_template('search.html', results=results, query=query, theme=theme)
 
-@app.route('/watch')
+@@app.route('/watch')
 @login_required
 def watch():
     v_id = request.args.get('v')
     if not v_id: return redirect(url_for('index'))
     
-    # 動画情報、コメント、ストリーム取得を並列化して劇的に高速化
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    edu_source = request.cookies.get('edu_source', 'siawaseok')
+    
+    # 実行速度を最大化するため、依存関係を整理してタスクを投入
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        # 1. [最優先] 動画情報の取得（これが終わらないとsourcesが確定できないため）
         info_future = executor.submit(request_invidious_api, f"/videos/{v_id}")
-        comments_future = executor.submit(request_invidious_api, f"/comments/{v_id}")
         
+        # 2. [並列] コメントの取得（他と依存しないため即座に開始）
+        comments_future = executor.submit(request_invidious_api, f"/comments/{v_id}")
+
+        # 動画情報を取得（タイムアウトを考慮しつつ最速で取得）
         video_info = info_future.result()
+        
+        # 動画情報取得失敗時の高速フォールバック
         if not video_info:
             try:
-                edu_res = http_session.get(f"{EDU_VIDEO_API}{v_id}", timeout=2.5)
+                # タイムアウトを極限まで絞り、メインスレッドを止めない
+                edu_res = http_session.get(f"{EDU_VIDEO_API}{v_id}", timeout=1.5)
                 video_info = edu_res.json()
             except:
+                # 失敗時は即座にリダイレクト
                 return redirect(f"/sub/watch?v={v_id}")
 
-    edu_source = request.cookies.get('edu_source', 'siawaseok')
-    sources = get_stream_url(v_id, edu_source, video_info)
-    
+        # 3. [最速] 動画情報が確定した瞬間、ストリームURLの取得を別スレッドで開始
+        sources_future = executor.submit(get_stream_url, v_id, edu_source, video_info)
+        
+        # 4. ストリームの計算中に、並列で動いていたコメントの結果を回収
+        try:
+            # waitを最小限にし、動画ソースの解決と並列させる
+            comments_data = comments_future.result(timeout=1.0)
+            comments = comments_data.get('comments', []) if comments_data else []
+        except:
+            comments = []
+            
+        # 5. 最後にストリームの結果を待機
+        sources = sources_future.result()
+
+    # レンダリング直前のデータ補完
     if not sources.get('m3u8'):
         sources['m3u8'] = ""
 
     if not sources.get('m3u8') and not sources.get('primary'):
          return redirect(f"/sub/watch?v={v_id}")
-
-    # コメントは取得済みか再確認し、失敗しても続行
-    try:
-        comments_data = comments_future.result(timeout=1.0)
-        comments = comments_data.get('comments', []) if comments_data else []
-    except:
-        comments = []
     
     theme = request.cookies.get('theme', 'dark')
     
