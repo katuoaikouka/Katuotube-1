@@ -106,18 +106,33 @@ def get_random_headers():
 
 @lru_cache(maxsize=256) # キャッシュを倍増
 def request_invidious_api(path, timeout=(1.0, 1.8)): # タイムアウトをより厳格に
-    # 優先インスタンスを先頭にし、残りをシャッフル
+    # 優先インスタンスを先頭にし、残りを現在のINVIDIOUS_INSTANCESの順序で結合
     others = [i for i in INVIDIOUS_INSTANCES if i.rstrip('/') != PRIORITY_INSTANCE.rstrip('/')]
-    random.shuffle(others)
     instances = [PRIORITY_INSTANCE] + others
 
     for instance in instances:
         base_url = instance.rstrip('/')
         try:
+            start_time = time.time()
             res = http_session.get(f"{base_url}/api/v1{path}", timeout=timeout, headers=get_random_headers())
-            if res.status_code == 200: 
+            duration = time.time() - start_time
+            
+            if res.status_code == 200:
+                # 応答が遅すぎる（1.5秒以上）場合、リストの後ろに回す
+                if duration > 1.5 and instance in INVIDIOUS_INSTANCES:
+                    INVIDIOUS_INSTANCES.remove(instance)
+                    INVIDIOUS_INSTANCES.append(instance)
                 return res.json()
-        except: 
+            else:
+                # エラー時もリストの後ろへ
+                if instance in INVIDIOUS_INSTANCES:
+                    INVIDIOUS_INSTANCES.remove(instance)
+                    INVIDIOUS_INSTANCES.append(instance)
+        except:
+            # タイムアウト等でもリストの後ろへ
+            if instance in INVIDIOUS_INSTANCES:
+                INVIDIOUS_INSTANCES.remove(instance)
+                INVIDIOUS_INSTANCES.append(instance)
             continue
     return None
 
@@ -411,10 +426,12 @@ def analyze_video():
         pass
 
     if video_id:
-        fallback_instances = ["https://yt.omada.cafe", "https://inv.nadeko.net"]
+        # 解析時もフェイルオーバーを考慮
+        others = [i for i in INVIDIOUS_INSTANCES if i.rstrip('/') != PRIORITY_INSTANCE.rstrip('/')]
+        fallback_instances = [PRIORITY_INSTANCE] + others
         for instance in fallback_instances:
             try:
-                inv_api_url = f"{instance}/api/v1/videos/{video_id}"
+                inv_api_url = f"{instance.rstrip('/')}/api/v1/videos/{video_id}"
                 res = http_session.get(inv_api_url, timeout=5, headers=get_random_headers())
                 
                 if res.status_code == 200:
@@ -444,7 +461,14 @@ def analyze_video():
                         "duration": inv_data.get('lengthSeconds'),
                         "formats": formats
                     })
+                else:
+                    if instance in INVIDIOUS_INSTANCES:
+                        INVIDIOUS_INSTANCES.remove(instance)
+                        INVIDIOUS_INSTANCES.append(instance)
             except Exception:
+                if instance in INVIDIOUS_INSTANCES:
+                    INVIDIOUS_INSTANCES.remove(instance)
+                    INVIDIOUS_INSTANCES.append(instance)
                 continue
 
     return jsonify({"error": "すべてのインスタンスで取得に失敗しました。時間をおいて試してください。"}), 500
