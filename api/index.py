@@ -652,9 +652,8 @@ def github_tool():
     shared_url = request.args.get('url', '')
     return render_template('github.html', shared_url=shared_url)
 
-@app.route('/instagram)
-def insta_game():
-    # templatesフォルダ内のinstagramgame.htmlを読み込む
+@app.route('/instagramgame.html')
+def instagram_game():
     return render_template('instagramgame.html')
 
 if __name__ == '__main__':
