@@ -502,27 +502,45 @@ def high_quality_watch():
     edu_source = request.cookies.get('edu_source', 'siawaseok')
     base_sources = get_stream_url(v_id, edu_source, video_info)
 
-    adaptive = video_info.get("adaptiveFormats", [])
+    # analyze_videoのロジックを参考に、formatsとadaptiveFormatsの両方に対応
+    adaptive = video_info.get("adaptiveFormats", []) or video_info.get("formats", [])
     video_url = None
     audio_url = None
 
-    # 映像ストリームの選定: 解像度の高い順、かつfpsの高い順にスキャン
-    for res_label in ["2160p", "1440p", "1080p", "720p"]:
-        # 同じ解像度の中でfpsが最も高いものを優先して抽出
-        v_streams = [f for f in adaptive if f.get("resolution") == res_label and "video" in f.get("type", "")]
+    # 映像ストリームの選定: 解像度の高い順にスキャン
+    # qualityLabel(1080p) と resolution(1920x1080) の両方の形式に対応できるよう調整
+    target_resolutions = ["2160", "1440", "1080", "720"]
+    found_video = False
+    for res_val in target_resolutions:
+        v_streams = [
+            f for f in adaptive 
+            if res_val in str(f.get("qualityLabel") or f.get("resolution") or "")
+            and (f.get("vcodec") != "none" or "video" in f.get("type", ""))
+        ]
         if v_streams:
-            # fpsで降順ソートして先頭を取得
-            v_stream = sorted(v_streams, key=lambda x: int(x.get("fps", 0)), reverse=True)[0]
+            # fpsが高いものを優先
+            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)[0]
             video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
+            found_video = True
             break
+    
+    # 万が一上記で見つからない場合、単純に最も高さ(height)があるものを選ぶ
+    if not found_video:
+        v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
+        if v_only:
+            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)[0]
+            video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
 
     # 音声ストリームの選定: 音質が最も良い（ビットレートが高い）ものを優先
-    a_streams = [f for f in adaptive if "audio" in f.get("type", "")]
+    a_streams = [
+        f for f in adaptive 
+        if (f.get("acodec") != "none" or "audio" in f.get("type", ""))
+        and (f.get("vcodec") == "none" or "video" not in f.get("type", ""))
+    ]
     if a_streams:
-        # まずMEDIUM品質を探し、なければビットレート順でソートして取得
         a_stream_best = next((f for f in a_streams if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
-            a_stream_best = sorted(a_streams, key=lambda x: int(x.get("bitrate", 0)), reverse=True)[0]
+            a_stream_best = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)[0]
         
         if a_stream_best and isinstance(a_stream_best, dict):
             audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
@@ -655,6 +673,32 @@ def github_tool():
 @app.route('/instagramgame.html')
 def instagram_game():
     return render_template('instagramgame.html')
+
+@app.route('/proxy/video')
+def video_proxy():
+    target_url = request.args.get('url')
+    if not target_url:
+        return "URL missing", 400
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.youtube.com/'
+    }
+    
+    try:
+        # stream=Trueでデータを細切れに中継し、メモリ消費を抑えつつブロックを回避
+        req = http_session.get(target_url, headers=headers, stream=True, timeout=15)
+        
+        if req.status_code != 200:
+            return f"YouTube error: {req.status_code}", req.status_code
+
+        def generate():
+            for chunk in req.iter_content(chunk_size=8192):
+                yield chunk
+            
+        return Response(generate(), content_type=req.headers.get('Content-Type'))
+    except Exception as e:
+        return str(e), 500
 
 if __name__ == '__main__':
     # threaded=True でマルチスレッドを有効化
