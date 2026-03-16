@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Insta Pong Clone</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 500px;
+            /* インスタのDM背景に近いダークグラデーション */
+            background: radial-gradient(circle at center, #262626 0%, #000 100%);
+            overflow: hidden;
+        }
+        #score {
+            position: absolute;
+            top: 15%;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            font-size: 100px;
+            font-weight: 700;
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: 1;
+        }
+        #ball {
+            position: absolute;
+            font-size: 45px;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            z-index: 10;
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.3));
+            transition: transform 0.1s linear;
+        }
+        #paddle {
+            position: absolute;
+            bottom: 60px;
+            width: 90px;
+            height: 14px;
+            background-color: #ffffff;
+            border-radius: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 20;
+        }
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+            backdrop-filter: blur(5px);
+        }
+        .final-score { font-size: 24px; margin-bottom: 20px; }
+        .btn-restart {
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #0095f6; /* インスタブルー */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="score">0</div>
+    <div id="ball">👾</div>
+    <div id="paddle"></div>
+    
+    <div id="overlay">
+        <div style="font-size: 40px; font-weight: bold; margin-bottom: 10px;">終了</div>
+        <div id="final-score-val" class="final-score">スコア: 0</div>
+        <button class="btn-restart" onclick="resetGame()">もう一度プレイ</button>
+    </div>
+</div>
+
+<script>
+    const container = document.getElementById('game-container');
+    const ball = document.getElementById('ball');
+    const paddle = document.getElementById('paddle');
+    const scoreElement = document.getElementById('score');
+    const overlay = document.getElementById('overlay');
+    const finalScoreVal = document.getElementById('final-score-val');
+
+    const emojis = ['👾', '🎾', '⚽️', '🐥', '🍕', '🌮', '🎈'];
+    let containerRect = container.getBoundingClientRect();
+    let score = 0;
+    let ballX, ballY, dx, dy;
+    let rotation = 0;
+    let paddleX;
+    const paddleWidth = 90;
+    let isGameOver = false;
+    
+    // 初速と加速度設定
+    let baseSpeed = 4;
+    let speedMultiplier = 1;
+
+    function init() {
+        containerRect = container.getBoundingClientRect();
+        ball.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        ballX = containerRect.width / 2 - 30;
+        ballY = 100;
+        // ランダムな角度で開始
+        dx = (Math.random() > 0.5 ? 1 : -1) * baseSpeed;
+        dy = baseSpeed;
+        score = 0;
+        speedMultiplier = 1;
+        rotation = 0;
+        isGameOver = false;
+        scoreElement.textContent = score;
+        overlay.style.display = 'none';
+        update();
+    }
+
+    function movePaddle(e) {
+        if (isGameOver) return;
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let relativeX = clientX - containerRect.left;
+        paddleX = Math.max(paddleWidth / 2, Math.min(containerRect.width - paddleWidth / 2, relativeX));
+        paddle.style.left = paddleX + 'px';
+    }
+
+    window.addEventListener('mousemove', movePaddle);
+    window.addEventListener('touchmove', movePaddle, { passive: false });
+
+    function update() {
+        if (isGameOver) return;
+
+        // 加速度計算（スコアに応じてスピードアップ）
+        // スコア1点ごとに約3%ずつ速くなる
+        let currentSpeed = (baseSpeed + (score * 0.3)) * speedMultiplier;
+
+        ballX += (dx > 0 ? currentSpeed : -currentSpeed);
+        ballY += (dy > 0 ? currentSpeed : -currentSpeed);
+        
+        // 壁反射（左右）
+        if (ballX <= 0 || ballX + 60 >= containerRect.width) {
+            dx *= -1;
+            ballX = ballX <= 0 ? 0 : containerRect.width - 60;
+        }
+
+        // 壁反射（上）
+        if (ballY <= 0) {
+            dy *= -1;
+            ballY = 0;
+        }
+
+        // パドル衝突判定
+        let ballBottom = ballY + 60;
+        let ballCenter = ballX + 30;
+        let paddleTop = containerRect.height - 74; // bottom 60 + height 14
+
+        if (ballBottom >= paddleTop && ballBottom <= paddleTop + 20) {
+            if (ballCenter >= paddleX - paddleWidth/2 - 10 && ballCenter <= paddleX + paddleWidth/2 + 10) {
+                dy = -1; // 上方向へ
+                ballY = paddleTop - 61; // 埋まり防止
+                score++;
+                scoreElement.textContent = score;
+                
+                // 跳ね返り時に少し回転させる
+                rotation += 45;
+                
+                if (navigator.vibrate) navigator.vibrate(15);
+            }
+        }
+
+        // ゲームオーバー
+        if (ballY > containerRect.height) {
+            gameOver();
+            return;
+        }
+
+        ball.style.left = ballX + 'px';
+        ball.style.top = ballY + 'px';
+        ball.style.transform = `rotate(${rotation}deg)`;
+
+        requestAnimationFrame(update);
+    }
+
+    function gameOver() {
+        isGameOver = true;
+        finalScoreVal.textContent = "スコア: " + score;
+        overlay.style.display = 'flex';
+    }
+
+    function resetGame() {
+        init();
+    }
+
+    window.addEventListener('resize', () => {
+        containerRect = container.getBoundingClientRect();
+    });
+
+    init();
+</script>
+</body>
+</html>
