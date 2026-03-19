@@ -226,7 +226,7 @@ def get_stream_url(video_id, edu_source='siawaseok', video_info=None):
 
     return sources
 
-# --- ルート定義 ---
+# ルート定義 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -280,19 +280,8 @@ def watch():
          return redirect(f"/sub/watch?v={v_id}")
 
     # 画質選択用 (format_streams) の取得ロジックを追加
+    # 初期状態では空にして、JavaScript側で yudlp.vercel.app から動的取得させる
     format_streams = []
-    if video_info and 'formatStreams' in video_info:
-        for s in video_info['formatStreams']:
-            # 映像と音声が両方含まれるMP4を優先的に抽出
-            if 'video' in s.get('type', '') and 'audio' in s.get('type', ''):
-                format_streams.append({
-                    'url': s.get('url'),
-                    'qualityLabel': s.get('qualityLabel') or s.get('quality'),
-                    'container': s.get('container') or 'mp4',
-                    'size': s.get('sizeText') or '不明'
-                })
-    # 画質の降順でソート
-    format_streams.sort(key=lambda x: int(''.join(filter(str.isdigit, x['qualityLabel'] or '0'))), reverse=True)
 
     # コメント取得
     comments = []
