@@ -209,9 +209,54 @@
         document.getElementById('embed-selector-modal').style.display = 'none';
     }
     
-    function showQualitySelector() {
-        document.getElementById('quality-selector-modal').style.display = 'flex';
+    // 画質選択モーダルを表示し、データを動的に取得する
+    async function showQualitySelector() {
+        const modal = document.getElementById('quality-selector-modal');
+        const container = document.getElementById('quality-options');
+        const videoId = "{{ video_id or video.videoId }}";
+        
+        modal.style.display = 'flex';
+        container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loader"></div><p>ソースを取得中...</p></div>';
+
+        try {
+            // 外部APIからストリーム情報を取得
+            const response = await fetch(`https://yudlp.vercel.app/stream/${videoId}`);
+            const data = await response.json();
+
+            if (data.formats && data.formats.length > 0) {
+                container.innerHTML = '';
+                // 映像と音声が両方あるMP4のみを表示
+                const validFormats = data.formats.filter(f => f.ext === 'mp4' && f.vcodec !== 'none' && f.acodec !== 'none');
+                
+                if (validFormats.length === 0) {
+                    container.innerHTML = '<p style="text-align:center; padding:20px;">再生可能なMP4ソースが見つかりませんでした。</p>';
+                    return;
+                }
+
+                validFormats.forEach(stream => {
+                    const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
+                    const option = document.createElement('label');
+                    option.className = 'option-item';
+                    option.onclick = () => setPrimarySource(stream.url);
+                    option.innerHTML = `
+                        <input type="radio" name="quality_source">
+                        <div class="option-info">
+                            <span class="option-title">${stream.format_note || stream.height + 'p'}</span>
+                            <span class="option-sub">${stream.ext} - ${sizeMB}</span>
+                        </div>
+                        <div class="check-mark"></div>
+                    `;
+                    container.appendChild(option);
+                });
+            } else {
+                container.innerHTML = '<p style="text-align:center; padding:20px;">ソースが見つかりませんでした。</p>';
+            }
+        } catch (error) {
+            console.error("Fetch error:", error);
+            container.innerHTML = '<p style="text-align:center; padding:20px; color:#f44;">データの取得に失敗しました。再試行してください。</p>';
+        }
     }
+
     function closeQualitySelector() {
         document.getElementById('quality-selector-modal').style.display = 'none';
     }
