@@ -40,23 +40,25 @@
             
             <div class="video-actions">
                 <div class="channel-area">
-                    <div class="channel-icon-wrapper">
-                        {% if video.authorThumbnails %}
-                        <img src="{{ video.authorThumbnails[-1].url }}" class="channel-icon-img" alt="{{ video.author }}">
-                        {% else %}
-                        <div class="channel-icon-placeholder">{{ video.author[0] if video.author else '🐟' }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="channel-text">
-                        <div class="author-name">{{ video.author }}</div>
-                        <div class="sub-count">{{ video.subCountText or "チャンネル登録者数非公開" }}</div>
-                    </div>
+                    <a href="/channel/{{ video.authorId }}" style="text-decoration: none; display: flex; align-items: center; gap: 12px; color: inherit;">
+                        <div class="channel-icon-wrapper">
+                            {% if video.authorThumbnails %}
+                            <img src="{{ video.authorThumbnails[-1].url }}" class="channel-icon-img" alt="{{ video.author }}">
+                            {% else %}
+                            <div class="channel-icon-placeholder">{{ video.author[0] if video.author else '🐟' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="channel-text">
+                            <div class="author-name" style="font-weight: bold;">{{ video.author }}</div>
+                            <div class="sub-count">{{ video.subCountText or "チャンネル登録者数非公開" }}</div>
+                        </div>
+                    </a>
                 </div>
                 
                 <div class="mode-selector">
                     {% if sources.high %}<button onclick="changeMode('high')" id="btn-high" class="yt-btn">高画質(720p)</button>{% endif %}
                     <button onclick="changeMode('m3u8')" id="btn-m3u8" class="yt-btn">通常(HLS)</button>
-                    <button onclick="changeMode('primary')" id="btn-primary" class="yt-btn">軽量(MP4)</button>
+                    <button onclick="changeMode('primary')" ondblclick="showQualitySelector()" id="btn-primary" class="yt-btn" title="ダブルクリックで画質切替">軽量(MP4)</button>
                     <button onclick="changeMode('embed')" ondblclick="showEmbedSelector()" id="btn-embed" class="yt-btn" title="ダブルクリックでソース切替">埋め込み</button>
                 </div>
             </div>
@@ -75,10 +77,12 @@
                 <div class="comments-list">
                     {% for comment in comments %}
                     <div class="comment-item">
-                        <img src="{{ comment.authorThumbnails[-1].url if comment.authorThumbnails else '' }}" class="comment-author-icon" loading="lazy">
+                        <a href="/channel/{{ comment.authorId }}">
+                            <img src="{{ comment.authorThumbnails[-1].url if comment.authorThumbnails else '' }}" class="comment-author-icon" loading="lazy">
+                        </a>
                         <div class="comment-body">
                             <div class="comment-header">
-                                <span class="comment-author">{{ comment.author }}</span>
+                                <a href="/channel/{{ comment.authorId }}" style="text-decoration:none; color:inherit;"><span class="comment-author">{{ comment.author }}</span></a>
                                 <span class="comment-date">{{ comment.publishedText }}</span>
                             </div>
                             <div class="comment-text">{{ comment.contentHtml | safe }}</div>
@@ -145,6 +149,37 @@
     </div>
 </div>
 
+<div id="quality-selector-modal" class="modal-overlay" style="display:none;" onclick="closeQualitySelector()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>画質（MP4ソース）の選択</h3>
+            <button class="close-x" onclick="closeQualitySelector()">×</button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-desc">ytdlpで取得可能な全てのソースを表示しています。</p>
+            <div class="option-list" id="quality-options">
+                {% if format_streams %}
+                    {% for stream in format_streams %}
+                    <label class="option-item" onclick="setPrimarySource('{{ stream.url | safe }}')">
+                        <input type="radio" name="quality_source">
+                        <div class="option-info">
+                            <span class="option-title">{{ stream.qualityLabel or stream.resolution or '不明な画質' }}</span>
+                            <span class="option-sub">{{ stream.container or 'mp4' }} - {{ stream.size or 'サイズ不明' }}</span>
+                        </div>
+                        <div class="check-mark"></div>
+                    </label>
+                    {% endfor %}
+                {% else %}
+                    <p style="text-align:center; padding:20px; color:#888;">利用可能な個別ソースがありません。</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeQualitySelector()" class="modal-close-btn">閉じる</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
     const videoPlayer = document.getElementById('player');
@@ -173,6 +208,14 @@
     function closeEmbedSelector() {
         document.getElementById('embed-selector-modal').style.display = 'none';
     }
+    
+    function showQualitySelector() {
+        document.getElementById('quality-selector-modal').style.display = 'flex';
+    }
+    function closeQualitySelector() {
+        document.getElementById('quality-selector-modal').style.display = 'none';
+    }
+
     function setEmbedSource(type) {
         if (type === 'education') {
             sources.embed = sources.education;
@@ -182,10 +225,16 @@
             document.getElementById('opt-nocookie').checked = true;
         }
         
-        // 即座に反映させるためにisChangingModeを一時的に解除して呼び出し
         isChangingMode = false; 
         changeMode('embed');
         setTimeout(closeEmbedSelector, 300);
+    }
+
+    function setPrimarySource(url) {
+        sources.primary = url;
+        isChangingMode = false;
+        changeMode('primary');
+        setTimeout(closeQualitySelector, 300);
     }
 
     function changeMode(mode) {
@@ -223,7 +272,6 @@
             videoPlayer.src = "";
             videoPlayer.style.display = 'none';
             embedPlayer.style.display = 'block';
-            // iframeのキャッシュを回避して確実にリロードするためにURLを再設定
             embedPlayer.src = url;
             isChangingMode = false;
             return;
@@ -388,7 +436,6 @@
     .rel-title { font-size: 0.95rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .rel-author { font-size: 0.8rem; color: #606060; margin-top: 4px; }
 
-    /* モーダル用追加スタイル（見やすさ重視） */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .modal-content { background: #fff; width: 90%; max-width: 450px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow: hidden; animation: fadeIn 0.2s ease-out; }
     [data-theme="dark"] .modal-content { background: #212121; border: 1px solid #333; color: #fff; }
@@ -396,7 +443,7 @@
     [data-theme="dark"] .modal-header { border-bottom: 1px solid #333; }
     .modal-header h3 { margin: 0; font-size: 1.1rem; }
     .close-x { background: none; border: none; font-size: 24px; cursor: pointer; color: #888; }
-    .modal-body { padding: 20px; }
+    .modal-body { padding: 20px; max-height: 60vh; overflow-y: auto; }
     .modal-desc { font-size: 0.9rem; color: #666; margin-bottom: 20px; }
     [data-theme="dark"] .modal-desc { color: #aaa; }
     .option-list { display: flex; flex-direction: column; gap: 12px; }
