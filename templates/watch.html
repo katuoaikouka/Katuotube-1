@@ -152,7 +152,7 @@
 <div id="quality-selector-modal" class="modal-overlay" style="display:none;" onclick="closeQualitySelector()">
     <div class="modal-content" onclick="event.stopPropagation()">
         <div class="modal-header">
-            <h3>画質（MP4ソース）の選択</h3>
+            <h3>画質（MP4/WebMソース）の選択</h3>
             <button class="close-x" onclick="closeQualitySelector()">×</button>
         </div>
         <div class="modal-body">
@@ -175,6 +175,7 @@
             </div>
         </div>
         <div class="modal-footer">
+            <button id="mse-btn" class="modal-close-btn" style="background:#f00; margin-right:8px; display:none;">MSE合成再生</button>
             <button onclick="closeQualitySelector()" class="modal-close-btn">閉じる</button>
         </div>
     </div>
@@ -213,10 +214,12 @@
     async function showQualitySelector() {
         const modal = document.getElementById('quality-selector-modal');
         const container = document.getElementById('quality-options');
+        const mseBtn = document.getElementById('mse-btn');
         const videoId = "{{ video_id or video.videoId }}";
         
         modal.style.display = 'flex';
         container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loader"></div><p>ソースを取得中...</p></div>';
+        mseBtn.style.display = 'none';
 
         try {
             // 外部APIからストリーム情報を取得
@@ -225,29 +228,41 @@
 
             if (data.formats && data.formats.length > 0) {
                 container.innerHTML = '';
-                // 映像と音声が両方あるMP4のみを表示
-                const validFormats = data.formats.filter(f => f.ext === 'mp4' && f.vcodec !== 'none' && f.acodec !== 'none');
+                // 映像と音声が両方あるMP4/WebMを抽出
+                const validFormats = data.formats.filter(f => (f.ext === 'mp4' || f.ext === 'webm') && f.vcodec !== 'none' && f.acodec !== 'none');
                 
                 if (validFormats.length === 0) {
-                    container.innerHTML = '<p style="text-align:center; padding:20px;">再生可能なMP4ソースが見つかりませんでした。</p>';
-                    return;
+                    container.innerHTML = '<p style="text-align:center; padding:20px;">再生可能なソースが見つかりませんでした。</p>';
+                } else {
+                    validFormats.forEach(stream => {
+                        const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
+                        const option = document.createElement('label');
+                        option.className = 'option-item';
+                        option.onclick = () => setPrimarySource(stream.url);
+                        option.innerHTML = `
+                            <input type="radio" name="quality_source">
+                            <div class="option-info">
+                                <span class="option-title">${stream.format_note || stream.height + 'p'}</span>
+                                <span class="option-sub">${stream.ext} - ${sizeMB}</span>
+                            </div>
+                            <div class="check-mark"></div>
+                        `;
+                        container.appendChild(option);
+                    });
                 }
 
-                validFormats.forEach(stream => {
-                    const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
-                    const option = document.createElement('label');
-                    option.className = 'option-item';
-                    option.onclick = () => setPrimarySource(stream.url);
-                    option.innerHTML = `
-                        <input type="radio" name="quality_source">
-                        <div class="option-info">
-                            <span class="option-title">${stream.format_note || stream.height + 'p'}</span>
-                            <span class="option-sub">${stream.ext} - ${sizeMB}</span>
-                        </div>
-                        <div class="check-mark"></div>
-                    `;
-                    container.appendChild(option);
-                });
+                // MSEボタンの設定
+                const vOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0))[0];
+                const aOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0))[0];
+
+                if (vOnly && aOnly) {
+                    mseBtn.style.display = 'inline-block';
+                    mseBtn.onclick = () => {
+                        playWithMSE(vOnly.url, aOnly.url, vOnly.ext);
+                        closeQualitySelector();
+                    };
+                }
+
             } else {
                 container.innerHTML = '<p style="text-align:center; padding:20px;">ソースが見つかりませんでした。</p>';
             }
@@ -255,6 +270,38 @@
             console.error("Fetch error:", error);
             container.innerHTML = '<p style="text-align:center; padding:20px; color:#f44;">データの取得に失敗しました。再試行してください。</p>';
         }
+    }
+
+    async function playWithMSE(videoUrl, audioUrl, ext) {
+        console.log("Starting MSE Playback...");
+        const ms = new MediaSource();
+        videoPlayer.pause();
+        videoPlayer.src = URL.createObjectURL(ms);
+        
+        ms.addEventListener('sourceopen', async () => {
+            const videoMime = ext === 'webm' ? 'video/webm; codecs="vp9"' : 'video/mp4; codecs="avc1.4d401f"';
+            const audioMime = ext === 'webm' ? 'audio/webm; codecs="opus"' : 'audio/mp4; codecs="mp4a.40.2"';
+            
+            const videoSb = ms.addSourceBuffer(videoMime);
+            const audioSb = ms.addSourceBuffer(audioMime);
+
+            async function fetchAndAppend(url, sb) {
+                const res = await fetch(url);
+                const reader = res.body.getReader();
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    await new Promise(r => {
+                        sb.appendBuffer(value);
+                        sb.addEventListener('updateend', r, {once: true});
+                    });
+                }
+            }
+
+            fetchAndAppend(videoUrl, videoSb);
+            fetchAndAppend(audioUrl, audioSb);
+        });
+        videoPlayer.play().catch(e => console.error("MSE Playback Error", e));
     }
 
     function closeQualitySelector() {
