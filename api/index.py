@@ -279,6 +279,21 @@ def watch():
     if not sources.get('m3u8') and not sources.get('primary'):
          return redirect(f"/sub/watch?v={v_id}")
 
+    # 画質選択用 (format_streams) の取得ロジックを追加
+    format_streams = []
+    if video_info and 'formatStreams' in video_info:
+        for s in video_info['formatStreams']:
+            # 映像と音声が両方含まれるMP4を優先的に抽出
+            if 'video' in s.get('type', '') and 'audio' in s.get('type', ''):
+                format_streams.append({
+                    'url': s.get('url'),
+                    'qualityLabel': s.get('qualityLabel') or s.get('quality'),
+                    'container': s.get('container') or 'mp4',
+                    'size': s.get('sizeText') or '不明'
+                })
+    # 画質の降順でソート
+    format_streams.sort(key=lambda x: int(''.join(filter(str.isdigit, x['qualityLabel'] or '0'))), reverse=True)
+
     # コメント取得
     comments = []
     try:
@@ -295,6 +310,7 @@ def watch():
                            video_id=v_id,
                            sources=sources, 
                            streams=sources,
+                           format_streams=format_streams,
                            comments=comments,
                            theme=theme,
                            mode=request.args.get('mode', 'stream'))
