@@ -45,7 +45,7 @@
                             {% if video.authorThumbnails %}
                             <img src="{{ video.authorThumbnails[-1].url }}" class="channel-icon-img" alt="{{ video.author }}">
                             {% else %}
-                            <div class="channel-icon-placeholder">{{ video.author if video.author else '🐟' }}</div>
+                            <div class="channel-icon-placeholder">{{ video.author[0] if video.author else '🐟' }}</div>
                             {% endif %}
                         </div>
                         <div class="channel-text">
@@ -156,7 +156,7 @@
             <button class="close-x" onclick="closeQualitySelector()">×</button>
         </div>
         <div class="modal-body">
-            <p class="modal-desc">ytdlpで取得可能な全てのソースを表示しています。ダブルクリックでMSE高速再生を試行します。</p>
+            <p class="modal-desc">ytdlpで取得可能な全てのソースを表示しています。</p>
             <div class="option-list" id="quality-options">
                 {% if format_streams %}
                     {% for stream in format_streams %}
@@ -231,10 +231,6 @@
                 // 映像と音声が両方あるMP4/WebMを抽出
                 const validFormats = data.formats.filter(f => (f.ext === 'mp4' || f.ext === 'webm') && f.vcodec !== 'none' && f.acodec !== 'none');
                 
-                // MSE用のベストソースを事前計算
-                const vOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0));
-                const aOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0));
-
                 if (validFormats.length === 0) {
                     container.innerHTML = '<p style="text-align:center; padding:20px;">再生可能なソースが見つかりませんでした。</p>';
                 } else {
@@ -243,19 +239,6 @@
                         const option = document.createElement('label');
                         option.className = 'option-item';
                         option.onclick = () => setPrimarySource(stream.url);
-                        
-                        // ダブルクリックでMSE再生を起動
-                        option.ondblclick = (e) => {
-                            e.preventDefault();
-                            if (vOnly && aOnly) {
-                                playWithMSE(vOnly.url, aOnly.url, vOnly.ext);
-                                closeQualitySelector();
-                            } else {
-                                // 分離ソースがない場合は通常のセット
-                                setPrimarySource(stream.url);
-                            }
-                        };
-
                         option.innerHTML = `
                             <input type="radio" name="quality_source">
                             <div class="option-info">
@@ -267,6 +250,10 @@
                         container.appendChild(option);
                     });
                 }
+
+                // MSEボタンの設定
+                const vOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0))[0];
+                const aOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0))[0];
 
                 if (vOnly && aOnly) {
                     mseBtn.style.display = 'inline-block';
@@ -286,7 +273,7 @@
     }
 
     async function playWithMSE(videoUrl, audioUrl, ext) {
-        console.log("Starting Optimized MSE Playback...");
+        console.log("Starting MSE Playback...");
         const ms = new MediaSource();
         videoPlayer.pause();
         videoPlayer.src = URL.createObjectURL(ms);
@@ -298,31 +285,23 @@
             const videoSb = ms.addSourceBuffer(videoMime);
             const audioSb = ms.addSourceBuffer(audioMime);
 
-            // 高速化：映像と音声を並列でフェッチ開始
             async function fetchAndAppend(url, sb) {
                 const res = await fetch(url);
                 const reader = res.body.getReader();
-                
-                // 最初のチャンクを即座に処理して再生開始を早める
                 while (true) {
                     const {done, value} = await reader.read();
                     if (done) break;
-                    
-                    if (sb.updating) {
-                        await new Promise(r => sb.addEventListener('updateend', r, {once: true}));
-                    }
-                    sb.appendBuffer(value);
+                    await new Promise(r => {
+                        sb.appendBuffer(value);
+                        sb.addEventListener('updateend', r, {once: true});
+                    });
                 }
             }
 
-            // 並列実行
-            Promise.all([
-                fetchAndAppend(videoUrl, videoSb),
-                fetchAndAppend(audioUrl, audioSb)
-            ]).catch(e => console.error("MSE Buffer Error", e));
+            fetchAndAppend(videoUrl, videoSb);
+            fetchAndAppend(audioUrl, audioSb);
         });
-        
-        videoPlayer.play().catch(e => console.log("MSE Autoplay Note:", e));
+        videoPlayer.play().catch(e => console.error("MSE Playback Error", e));
     }
 
     function closeQualitySelector() {
