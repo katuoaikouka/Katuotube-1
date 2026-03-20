@@ -203,7 +203,7 @@
     const fatalUI = document.getElementById('fatal-error-ui');
     const errorMsg = document.getElementById('error-message');
     
-    // 指定された同期スクリプトの組み込み
+    // 指定された同期スクリプトの組み込み（修正版）
     var video = document.getElementById('videoPlayer');
     var audio = document.getElementById('audio');
 
@@ -220,25 +220,44 @@
       audio.currentTime = video.currentTime;
     });
 
+    // 0.1秒以上のズレを検知して修正するループ
+    setInterval(function() {
+        if (!video.paused && Math.abs(video.currentTime - audio.currentTime) > 0.1) {
+            audio.currentTime = video.currentTime;
+        }
+    }, 100);
+
     function startSyncPlayback() {
-        // メインプレイヤーを停止して隠し、同期用プレイヤーを表示エリアに移動させるか、
-        // もしくはメインプレイヤー自体を同期モードに切り替えます
         console.log("Starting synchronized high-quality playback...");
         
-        // メインプレイヤーのsrcを同期用videoのsrcに変更
         const syncVideoSrc = document.getElementById('videosrc')?.src;
         if(syncVideoSrc) {
             videoPlayer.src = syncVideoSrc;
             videoPlayer.play();
             
-            // 音声同期処理
-            audio.play();
-            
-            // メインプレイヤーのイベントに同期処理をバインド
-            videoPlayer.onplay = () => audio.play();
-            videoPlayer.onpause = () => audio.pause();
-            videoPlayer.onseeking = () => audio.currentTime = videoPlayer.currentTime;
-            videoPlayer.onseeked = () => audio.currentTime = videoPlayer.currentTime;
+            // 音声同期処理のバインド
+            videoPlayer.onplay = () => {
+                audio.currentTime = videoPlayer.currentTime;
+                audio.play();
+            };
+            videoPlayer.onpause = () => {
+                audio.pause();
+            };
+            videoPlayer.onseeking = () => {
+                audio.pause(); // シーク中は音を止める
+            };
+            videoPlayer.onseeked = () => {
+                audio.currentTime = videoPlayer.currentTime;
+                if (!videoPlayer.paused) audio.play();
+            };
+
+            // メインプレイヤーでのズレ補正（0.1秒）
+            if (window.syncInterval) clearInterval(window.syncInterval);
+            window.syncInterval = setInterval(function() {
+                if (!videoPlayer.paused && Math.abs(videoPlayer.currentTime - audio.currentTime) > 0.1) {
+                    audio.currentTime = videoPlayer.currentTime;
+                }
+            }, 100);
         }
         closeQualitySelector();
     }
