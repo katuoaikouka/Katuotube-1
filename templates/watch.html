@@ -156,6 +156,20 @@
             <button class="close-x" onclick="closeQualitySelector()">×</button>
         </div>
         <div class="modal-body">
+            <div id="sync-playback-test" style="margin-bottom: 20px; padding: 15px; border: 2px solid #f00; border-radius: 12px; background: rgba(255,0,0,0.05);">
+                <h4 style="margin-top:0;">高画質で再生（映像・音声同期）</h4>
+                <div style="display:none;">
+                    <video id="videoPlayer" controls playsinline preload="none">
+                      {% if highstream_url %}
+                        <source id="videosrc" src="{{ highstream_url }}" type="video/webm">
+                      {% endif %}
+                    </video>
+                    <audio id="audio" controls>
+                      <source src="{{ videourls }}" type="audio/mp3">
+                    </audio>
+                </div>
+                <button onclick="startSyncPlayback()" class="error-btn" style="width:100%; margin:0;">🚀 高画質(映像+音声)で同期再生</button>
+            </div>
             <p class="modal-desc">ytdlpで取得可能な全てのソースを表示しています。</p>
             <div class="option-list" id="quality-options">
                 {% if format_streams %}
@@ -189,6 +203,47 @@
     const fatalUI = document.getElementById('fatal-error-ui');
     const errorMsg = document.getElementById('error-message');
     
+    // 指定された同期スクリプトの組み込み
+    var video = document.getElementById('videoPlayer');
+    var audio = document.getElementById('audio');
+
+    video.addEventListener('play', function(){
+      audio.currentTime = video.currentTime;
+      audio.play();
+    });
+
+    video.addEventListener('pause', function(){
+      audio.pause();
+    });
+
+    video.addEventListener('seeked', function(){
+      audio.currentTime = video.currentTime;
+    });
+
+    function startSyncPlayback() {
+        // メインプレイヤーを停止して隠し、同期用プレイヤーを表示エリアに移動させるか、
+        // もしくはメインプレイヤー自体を同期モードに切り替えます
+        console.log("Starting synchronized high-quality playback...");
+        
+        // メインプレイヤーのsrcを同期用videoのsrcに変更
+        const syncVideoSrc = document.getElementById('videosrc')?.src;
+        if(syncVideoSrc) {
+            videoPlayer.src = syncVideoSrc;
+            videoPlayer.play();
+            
+            // 音声同期処理
+            audio.play();
+            
+            // メインプレイヤーのイベントに同期処理をバインド
+            videoPlayer.onplay = () => audio.play();
+            videoPlayer.onpause = () => audio.pause();
+            videoPlayer.onseeking = () => audio.currentTime = videoPlayer.currentTime;
+            videoPlayer.onseeked = () => audio.currentTime = videoPlayer.currentTime;
+        }
+        closeQualitySelector();
+    }
+    // 同期スクリプト終了
+
     const sources = { 
         high: '{{ sources.high | safe }}',
         m3u8: '{{ sources.m3u8 | safe }}', 
@@ -229,59 +284,84 @@
             if (data.formats && data.formats.length > 0) {
                 container.innerHTML = '';
                 
-                // 映像と音声が両方ある通常のソースを表示
-                const validFormats = data.formats.filter(f => (f.ext === 'mp4' || f.ext === 'webm') && f.vcodec !== 'none' && f.acodec !== 'none');
-                
-                validFormats.forEach(stream => {
-                    const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
-                    const option = document.createElement('label');
-                    option.className = 'option-item';
-                    option.onclick = () => setPrimarySource(stream.url);
-                    option.innerHTML = `
-                        <input type="radio" name="quality_source">
-                        <div class="option-info">
-                            <span class="option-title">${stream.format_note || stream.resolution || '不明な画質'}</span>
-                            <span class="option-sub">${stream.ext} - ${sizeMB}</span>
-                        </div>
-                        <div class="check-mark"></div>
-                    `;
-                    container.appendChild(option);
-                });
+                let selectedVideo = null;
+                let selectedAudio = null;
 
-                // --- 全ての解像度でMSEオプションをモーダル内に追加する処理 ---
-                const audioOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0));
-                const videoOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0));
-
-                if (videoOnly.length > 0 && audioOnly.length > 0) {
-                    const bestAudio = audioOnly; // 最もビットレートの高い音声
-                    const bestVideo = videoOnly; // 最も解像度の高い映像
-
-                    // メインのMSEボタンを設定
-                    mseBtn.style.display = 'inline-block';
-                    mseBtn.onclick = () => {
-                        playWithMSE(bestVideo.url, bestAudio.url, bestVideo.ext);
+                const checkAndPlayMSE = () => {
+                    if (selectedVideo && selectedAudio) {
+                        playWithMSE(selectedVideo.url, selectedAudio.url, selectedVideo.ext);
                         closeQualitySelector();
-                    };
+                    }
+                };
 
+                // 通常の（音声+映像）ストリーム
+                const validFormats = data.formats.filter(f => (f.ext === 'mp4' || f.ext === 'webm') && f.vcodec !== 'none' && f.acodec !== 'none');
+                if (validFormats.length > 0) {
+                    const group = document.createElement('div');
+                    group.innerHTML = '<h4 style="margin:10px 0">通常ソース</h4>';
+                    validFormats.forEach(stream => {
+                        const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
+                        const option = document.createElement('label');
+                        option.className = 'option-item';
+                        option.onclick = () => setPrimarySource(stream.url);
+                        option.innerHTML = `
+                            <input type="radio" name="quality_source">
+                            <div class="option-info">
+                                <span class="option-title">${stream.format_note || stream.resolution || '不明な画質'}</span>
+                                <span class="option-sub">${stream.ext} - ${sizeMB}</span>
+                            </div>
+                            <div class="check-mark"></div>
+                        `;
+                        group.appendChild(option);
+                    });
+                    container.appendChild(group);
+                }
+
+                // MSE用：ビデオのみ
+                const videoOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0));
+                if (videoOnly.length > 0) {
+                    const group = document.createElement('div');
+                    group.innerHTML = '<h4 style="margin:20px 0 10px 0">映像ソース (MSE用)</h4>';
                     videoOnly.forEach(vStream => {
                         const sizeMB = vStream.filesize ? (vStream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
                         const option = document.createElement('label');
                         option.className = 'option-item';
-                        option.style.border = '2px solid #f00'; // MSE用を目立たせる
-                        option.onclick = () => {
-                            playWithMSE(vStream.url, bestAudio.url, vStream.ext);
-                            closeQualitySelector();
-                        };
+                        option.style.borderColor = '#f003';
+                        option.onclick = () => { selectedVideo = vStream; checkAndPlayMSE(); };
                         option.innerHTML = `
-                            <input type="radio" name="quality_source">
+                            <input type="radio" name="mse_video">
                             <div class="option-info">
-                                <span class="option-title">✨ MSE合成: ${vStream.format_note || vStream.resolution || vStream.height + 'p'}</span>
-                                <span class="option-sub">${vStream.ext} - ${sizeMB} + 音声</span>
+                                <span class="option-title">📹 ${vStream.format_note || vStream.resolution || vStream.height + 'p'}</span>
+                                <span class="option-sub">${vStream.ext} - ${sizeMB}</span>
                             </div>
-                            <div class="check-mark" style="background:#f00; border-color:#f00;"></div>
+                            <div class="check-mark" style="border-color:#f00;"></div>
                         `;
-                        container.appendChild(option);
+                        group.appendChild(option);
                     });
+                    container.appendChild(group);
+                }
+
+                // MSE用：音声のみ
+                const audioOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0));
+                if (audioOnly.length > 0) {
+                    const group = document.createElement('div');
+                    group.innerHTML = '<h4 style="margin:20px 0 10px 0">音声ソース (MSE用)</h4>';
+                    audioOnly.forEach(aStream => {
+                        const option = document.createElement('label');
+                        option.className = 'option-item';
+                        option.style.borderColor = '#00f3';
+                        option.onclick = () => { selectedAudio = aStream; checkAndPlayMSE(); };
+                        option.innerHTML = `
+                            <input type="radio" name="mse_audio">
+                            <div class="option-info">
+                                <span class="option-title">🎵 音声: ${aStream.abr || '??'}kbps</span>
+                                <span class="option-sub">${aStream.ext} - ${aStream.acodec}</span>
+                            </div>
+                            <div class="check-mark" style="border-color:#00f;"></div>
+                        `;
+                        group.appendChild(option);
+                    });
+                    container.appendChild(group);
                 }
                 
                 if (container.innerHTML === '') {
