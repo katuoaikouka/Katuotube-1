@@ -249,17 +249,19 @@
                 });
 
                 // --- 全ての解像度でMSEオプションをモーダル内に追加する処理 ---
-                const aOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0));
-                const allVOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0));
+                const audioOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0));
+                const videoOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0));
 
-                if (allVOnly.length > 0 && aOnly) {
-                    allVOnly.forEach(vStream => {
+                if (videoOnly.length > 0 && audioOnly.length > 0) {
+                    const bestAudio = audioOnly; // 最もビットレートの高い音声を固定で使用
+                    
+                    videoOnly.forEach(vStream => {
                         const sizeMB = vStream.filesize ? (vStream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
                         const option = document.createElement('label');
                         option.className = 'option-item';
                         option.style.border = '2px solid #f00'; // MSE用を目立たせる
                         option.onclick = () => {
-                            playWithMSE(vStream.url, aOnly.url, vStream.ext);
+                            playWithMSE(vStream.url, bestAudio.url, vStream.ext);
                             closeQualitySelector();
                         };
                         option.innerHTML = `
