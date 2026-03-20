@@ -45,7 +45,7 @@
                             {% if video.authorThumbnails %}
                             <img src="{{ video.authorThumbnails[-1].url }}" class="channel-icon-img" alt="{{ video.author }}">
                             {% else %}
-                            <div class="channel-icon-placeholder">{{ video.author[0] if video.author else '🐟' }}</div>
+                            <div class="channel-icon-placeholder">{{ video.author if video.author else '🐟' }}</div>
                             {% endif %}
                         </div>
                         <div class="channel-text">
@@ -228,39 +228,54 @@
 
             if (data.formats && data.formats.length > 0) {
                 container.innerHTML = '';
-                // 映像と音声が両方あるMP4/WebMを抽出
+                
+                // 映像と音声が両方ある通常のソースを表示
                 const validFormats = data.formats.filter(f => (f.ext === 'mp4' || f.ext === 'webm') && f.vcodec !== 'none' && f.acodec !== 'none');
                 
-                if (validFormats.length === 0) {
-                    container.innerHTML = '<p style="text-align:center; padding:20px;">再生可能なソースが見つかりませんでした。</p>';
-                } else {
-                    validFormats.forEach(stream => {
-                        const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
+                validFormats.forEach(stream => {
+                    const sizeMB = stream.filesize ? (stream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
+                    const option = document.createElement('label');
+                    option.className = 'option-item';
+                    option.onclick = () => setPrimarySource(stream.url);
+                    option.innerHTML = `
+                        <input type="radio" name="quality_source">
+                        <div class="option-info">
+                            <span class="option-title">${stream.format_note || stream.height + 'p'}</span>
+                            <span class="option-sub">${stream.ext} - ${sizeMB}</span>
+                        </div>
+                        <div class="check-mark"></div>
+                    `;
+                    container.appendChild(option);
+                });
+
+                // --- 1080p以上のMSEオプションをモーダル内に追加する処理 ---
+                const aOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0));
+                const highResVOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none' && (f.height || 0) >= 1080).sort((a,b) => (b.height || 0) - (a.height || 0));
+
+                if (highResVOnly.length > 0 && aOnly) {
+                    highResVOnly.forEach(vStream => {
+                        const sizeMB = vStream.filesize ? (vStream.filesize / (1024 * 1024)).toFixed(1) + 'MB' : '不明';
                         const option = document.createElement('label');
                         option.className = 'option-item';
-                        option.onclick = () => setPrimarySource(stream.url);
+                        option.style.border = '2px solid #f00'; // MSE用を目立たせる
+                        option.onclick = () => {
+                            playWithMSE(vStream.url, aOnly.url, vStream.ext);
+                            closeQualitySelector();
+                        };
                         option.innerHTML = `
                             <input type="radio" name="quality_source">
                             <div class="option-info">
-                                <span class="option-title">${stream.format_note || stream.height + 'p'}</span>
-                                <span class="option-sub">${stream.ext} - ${sizeMB}</span>
+                                <span class="option-title">✨ MSE合成: ${vStream.format_note || vStream.height + 'p'}</span>
+                                <span class="option-sub">${vStream.ext} (高画質) - ${sizeMB} + 音声</span>
                             </div>
-                            <div class="check-mark"></div>
+                            <div class="check-mark" style="background:#f00; border-color:#f00;"></div>
                         `;
                         container.appendChild(option);
                     });
                 }
-
-                // MSEボタンの設定
-                const vOnly = data.formats.filter(f => f.vcodec !== 'none' && f.acodec === 'none').sort((a,b) => (b.height || 0) - (a.height || 0))[0];
-                const aOnly = data.formats.filter(f => f.acodec !== 'none' && f.vcodec === 'none').sort((a,b) => (b.abr || 0) - (a.abr || 0))[0];
-
-                if (vOnly && aOnly) {
-                    mseBtn.style.display = 'inline-block';
-                    mseBtn.onclick = () => {
-                        playWithMSE(vOnly.url, aOnly.url, vOnly.ext);
-                        closeQualitySelector();
-                    };
+                
+                if (container.innerHTML === '') {
+                    container.innerHTML = '<p style="text-align:center; padding:20px;">再生可能なソースが見つかりませんでした。</p>';
                 }
 
             } else {
