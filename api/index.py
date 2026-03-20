@@ -76,6 +76,7 @@ INVIDIOUS_INSTANCES = [
 M3U8_API = "https://yudlp.vercel.app/m3u8/"
 STREAM_API = "https://ytdlpinstance-vercel.vercel.app/stream/"
 EDU_VIDEO_API = "https://siawaseok.duckdns.org/api/video2/"
+YTDLP_API_BASE = "https://ytdlpinstance-vercel.vercel.app"
 
 EDU_PARAM_SOURCES = {
     'siawaseok': {'url': 'https://raw.githubusercontent.com/siawaseok3/wakame/master/video_config.json', 'type': 'json_params'},
@@ -708,6 +709,53 @@ def video_proxy():
 @app.route('/helios.html')
 def helios_proxy():
     return render_template('helios.html')
+
+@app.route('/mix')
+def mix_stream():
+    video_id = request.args.get('v')
+    if not video_id:
+        return jsonify({'error': 'No video ID provided'}), 400
+
+    try:
+        # 外部APIからストリーム情報を取得
+        # APIの仕様に合わせてエンドポイントを /stream/ID と想定しています
+        api_url = f"{YTDLP_API_BASE}/stream/{video_id}"
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        formats = data.get('formats', [])
+        
+        # 1. 映像のみ (vcodecあり, acodecなし) の中から最高画質を探す
+        # 解像度（height）が高い順にソート
+        video_only = [f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') == 'none']
+        video_only.sort(key=lambda x: x.get('height') or 0, reverse=True)
+        
+        # 2. 音声のみ (acodecあり, vcodecなし) の中から最高音質を探す
+        # ビットレート（abr）が高い順にソート
+        audio_only = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
+        audio_only.sort(key=lambda x: x.get('abr') or 0, reverse=True)
+
+        # 結果の組み立て
+        res_data = {
+            'video_url': video_only['url'] if video_only else None,
+            'audio_url': audio_only['url'] if audio_only else None,
+            'title': data.get('title', 'Unknown Title')
+        }
+
+        # どちらかが見つからない場合のフォールバック（通常の結合済みソースを探す）
+        if not res_data['video_url']:
+            combined = [f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none']
+            if combined:
+                combined.sort(key=lambda x: x.get('height') or 0, reverse=True)
+                res_data['video_url'] = combined['url']
+
+        return jsonify(res_data)
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'External API error: {str(e)}'}), 502
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # threaded=True でマルチスレッドを有効化
