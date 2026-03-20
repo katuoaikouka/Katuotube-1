@@ -717,8 +717,7 @@ def mix_stream():
         return jsonify({'error': 'No video ID provided'}), 400
 
     try:
-        # 外部APIからストリーム情報を取得
-        # APIの仕様に合わせてエンドポイントを /stream/ID と想定しています
+        # 外部APIから情報を取得
         api_url = f"{YTDLP_API_BASE}/stream/{video_id}"
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
@@ -726,35 +725,41 @@ def mix_stream():
 
         formats = data.get('formats', [])
         
-        # 1. 映像のみ (vcodecあり, acodecなし) の中から最高画質を探す
-        # 解像度（height）が高い順にソート
-        video_only = [f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') == 'none']
-        video_only.sort(key=lambda x: x.get('height') or 0, reverse=True)
+        # 映像のみのリスト（vcodecがある、かつ acodecが 'none' または存在しない）
+        video_only = [f for f in formats if f.get('vcodec') != 'none' and (f.get('acodec') == 'none' or not f.get('acodec'))]
         
-        # 2. 音声のみ (acodecあり, vcodecなし) の中から最高音質を探す
-        # ビットレート（abr）が高い順にソート
-        audio_only = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-        audio_only.sort(key=lambda x: x.get('abr') or 0, reverse=True)
+        # 音声のみのリスト（acodecがある、かつ vcodecが 'none' または存在しない）
+        audio_only = [f for f in formats if f.get('acodec') != 'none' and (f.get('vcodec') == 'none' or not f.get('vcodec'))]
 
-        # 結果の組み立て
+        # 映像：解像度(height)でソート。Noneや文字列を考慮してint変換。
+        def get_height(f):
+            h = f.get('height')
+            return int(h) if h and str(h).isdigit() else 0
+
+        # 音声：ビットレート(abr)でソート
+        def get_abr(f):
+            a = f.get('abr')
+            return float(a) if a and (isinstance(a, (int, float)) or str(a).replace('.','',1).isdigit()) else 0
+
+        video_only.sort(key=get_height, reverse=True)
+        audio_only.sort(key=get_abr, reverse=True)
+
         res_data = {
             'video_url': video_only['url'] if video_only else None,
             'audio_url': audio_only['url'] if audio_only else None,
-            'title': data.get('title', 'Unknown Title')
         }
 
-        # どちらかが見つからない場合のフォールバック（通常の結合済みソースを探す）
+        # 映像が見つからない場合のフォールバック（通常の動画）
         if not res_data['video_url']:
-            combined = [f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none']
+            combined = [f for f in formats if f.get('vcodec') != 'none']
+            combined.sort(key=get_height, reverse=True)
             if combined:
-                combined.sort(key=lambda x: x.get('height') or 0, reverse=True)
                 res_data['video_url'] = combined['url']
 
         return jsonify(res_data)
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'External API error: {str(e)}'}), 502
     except Exception as e:
+        print(f"Error: {e}") # サーバーログに出力
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
