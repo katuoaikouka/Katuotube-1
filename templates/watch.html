@@ -62,13 +62,17 @@
                 </div>
                 
                 <div class="mode-selector">
-                    <div class="yt-dropdown-container">
-                        <select id="mode-dropdown" class="yt-select" onchange="handleDropdownChange(this)">
-                            {% if sources.high %}<option value="high">高画質 (720p)</option>{% endif %}
-                            <option value="m3u8">通常 (HLS)</option>
-                            <option value="primary">軽量 (MP4)</option>
-                            <option value="embed">埋め込み</option>
-                        </select>
+                    <div class="custom-dropdown" id="mode-custom-dropdown">
+                        <button class="dropdown-trigger" onclick="toggleCustomDropdown()">
+                            <span id="current-mode-text">読み込み中...</span>
+                            <svg viewBox="0 0 24 24" class="dropdown-arrow"><path d="M7 10l5 5 5-5z"></path></svg>
+                        </button>
+                        <div class="dropdown-menu" id="mode-options">
+                            {% if sources.high %}<div class="dropdown-item" onclick="handleCustomSelect('high')">高画質 (720p)</div>{% endif %}
+                            <div class="dropdown-item" onclick="handleCustomSelect('m3u8')">通常 (HLS)</div>
+                            <div class="dropdown-item" onclick="handleCustomSelect('primary')">軽量 (MP4)</div>
+                            <div class="dropdown-item" onclick="handleCustomSelect('embed')">埋め込み</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -215,12 +219,25 @@
     const maxRetries = 2;
     let isChangingMode = false;
 
-    // プルダウン変更時のハンドラ
-    function handleDropdownChange(select) {
-        if (select.value === 'embed') {
+    // カスタムドロップダウンのトグル
+    function toggleCustomDropdown() {
+        document.getElementById('mode-custom-dropdown').classList.toggle('active');
+    }
+
+    // ドキュメントクリックでドロップダウンを閉じる
+    document.addEventListener('click', function(e) {
+        if (!document.getElementById('mode-custom-dropdown').contains(e.target)) {
+            document.getElementById('mode-custom-dropdown').classList.remove('active');
+        }
+    });
+
+    // カスタムドロップダウン選択時のハンドラ
+    function handleCustomSelect(value) {
+        document.getElementById('mode-custom-dropdown').classList.remove('active');
+        if (value === 'embed') {
             showEmbedSelector();
         } else {
-            changeMode(select.value);
+            changeMode(value);
         }
     }
 
@@ -340,8 +357,14 @@
     
     // ドロップダウンの表示を現在のモードに同期
     function syncDropdown(mode) {
-        const dropdown = document.getElementById('mode-dropdown');
-        if (mode && dropdown) dropdown.value = mode;
+        const textMap = {
+            'high': '高画質 (720p)',
+            'm3u8': '通常 (HLS)',
+            'primary': '軽量 (MP4)',
+            'embed': '埋め込み'
+        };
+        const textElem = document.getElementById('current-mode-text');
+        if (mode && textElem) textElem.innerText = textMap[mode] || mode;
     }
 
     function setEmbedSource(type) {
@@ -533,12 +556,24 @@
     [data-theme="dark"] .yt-subscribe-btn { background: #f1f1f1; color: #0f0f0f; }
     [data-theme="dark"] .yt-subscribe-btn.subscribed { background: rgba(255,255,255,0.1); color: #fff; }
 
-    /* モードセレクター（プルダウン化） */
-    .yt-dropdown-container { display: flex; align-items: center; background: rgba(0,0,0,0.05); border-radius: 18px; padding: 0 4px 0 12px; height: 36px; }
-    [data-theme="dark"] .yt-dropdown-container { background: rgba(255,255,255,0.1); }
-    .yt-select { background: transparent; border: none; color: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; outline: none; padding-right: 8px; }
-    .yt-select option { background: #fff; color: #000; }
-    [data-theme="dark"] .yt-select option { background: #212121; color: #fff; }
+    /* 独自カスタムドロップダウン */
+    .custom-dropdown { position: relative; min-width: 140px; z-index: 100; }
+    .dropdown-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(0,0,0,0.05); border: none; border-radius: 18px; padding: 0 12px; height: 36px; color: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.2s; }
+    [data-theme="dark"] .dropdown-trigger { background: rgba(255,255,255,0.1); }
+    .dropdown-trigger:hover { background: rgba(0,0,0,0.1); }
+    [data-theme="dark"] .dropdown-trigger:hover { background: rgba(255,255,255,0.15); }
+    .dropdown-arrow { width: 18px; height: 18px; fill: currentColor; transition: transform 0.2s; }
+    .custom-dropdown.active .dropdown-arrow { transform: rotate(180deg); }
+    
+    .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: none; overflow: hidden; min-width: 100%; }
+    [data-theme="dark"] .dropdown-menu { background: #282828; border: 1px solid #3f3f3f; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    .custom-dropdown.active .dropdown-menu { display: block; animation: slideDown 0.15s ease-out; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .dropdown-item { padding: 10px 16px; font-size: 0.9rem; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+    .dropdown-item:hover { background: rgba(0,0,0,0.05); }
+    [data-theme="dark"] .dropdown-item:hover { background: rgba(255,255,255,0.1); }
+
     .yt-icon-btn { background: none; border: none; color: inherit; cursor: pointer; display: flex; align-items: center; padding: 6px; border-radius: 50%; transition: 0.2s; }
     .yt-icon-btn:hover { background: rgba(0,0,0,0.1); }
     [data-theme="dark"] .yt-icon-btn:hover { background: rgba(255,255,255,0.1); }
