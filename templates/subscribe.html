@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}登録チャンネル - かつおTube{% endblock %}
+
+{% block content %}
+<div class="subs-container">
+    <div class="subs-header">
+        <h1 class="subs-title">登録チャンネル</h1>
+        <div class="subs-actions">
+            <button id="manage-toggle" class="manage-btn" onclick="toggleManageMode()">管理</button>
+            <div class="view-mode-icons">
+                <button class="icon-btn active" id="grid-view-btn" onclick="setViewMode('grid')">
+                    <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"></path></svg>
+                </button>
+                <button class="icon-btn" id="list-view-btn" onclick="setViewMode('list')">
+                    <svg viewBox="0 0 24 24"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="subs-grid" class="subs-grid mode-grid">
+        </div>
+
+    <div id="no-subs-message" class="empty-state" style="display:none;">
+        <div class="empty-icon-container">
+            <svg viewBox="0 0 24 24" class="empty-svg"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"></path></svg>
+        </div>
+        <h2 class="empty-title">新しいお気に入りを見つけましょう</h2>
+        <p class="empty-desc">登録したチャンネルの最新動画がここに表示されます。</p>
+        <a href="/" class="explore-btn">ホームへ移動</a>
+    </div>
+</div>
+
+<script>
+    let isManageMode = false;
+
+    function loadSubscriptions() {
+        const grid = document.getElementById('subs-grid');
+        const emptyMsg = document.getElementById('no-subs-message');
+        const subscriptions = JSON.parse(localStorage.getItem('subscriptions') || '[]');
+
+        if (subscriptions.length === 0) {
+            grid.style.display = 'none';
+            emptyMsg.style.display = 'flex';
+            return;
+        }
+
+        grid.style.display = 'grid';
+        emptyMsg.style.display = 'none';
+        grid.innerHTML = '';
+
+        [...subscriptions].reverse().forEach(sub => {
+            const card = document.createElement('div');
+            card.className = `sub-card ${isManageMode ? 'manage-active' : ''}`;
+            
+            // 登録者数のフェイクデータ（見た目のため）
+            const fakeSubCount = sub.subCount || (Math.floor(Math.random() * 900) + 100) + "万";
+
+            card.innerHTML = `
+                <a href="/channel/${sub.id}" class="sub-link">
+                    <div class="sub-avatar-wrapper">
+                        <img src="${sub.thumbnail}" alt="${sub.name}" class="sub-avatar" onerror="this.src='https://via.placeholder.com/150'">
+                    </div>
+                    <div class="sub-info">
+                        <div class="sub-name">${sub.name}</div>
+                        <div class="sub-meta">チャンネル登録者数 ${fakeSubCount}人</div>
+                    </div>
+                </a>
+                <div class="sub-actions-area">
+                    <button class="unsubscribe-btn" onclick="removeSub(event, '${sub.id}')">
+                        <svg viewBox="0 0 24 24" class="check-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg>
+                        <span>登録済み</span>
+                    </button>
+                    <button class="bell-btn">
+                        <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"></path></svg>
+                    </button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function toggleManageMode() {
+        isManageMode = !isManageMode;
+        const btn = document.getElementById('manage-toggle');
+        btn.innerText = isManageMode ? '完了' : '管理';
+        btn.classList.toggle('active-manage', isManageMode);
+        loadSubscriptions();
+    }
+
+    function setViewMode(mode) {
+        const grid = document.getElementById('subs-grid');
+        const gridBtn = document.getElementById('grid-view-btn');
+        const listBtn = document.getElementById('list-view-btn');
+
+        if (mode === 'grid') {
+            grid.classList.add('mode-grid');
+            grid.classList.remove('mode-list');
+            gridBtn.classList.add('active');
+            listBtn.classList.remove('active');
+        } else {
+            grid.classList.remove('mode-grid');
+            grid.classList.add('mode-list');
+            gridBtn.classList.remove('active');
+            listBtn.classList.add('active');
+        }
+    }
+
+    function removeSub(event, id) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        if (confirm('チャンネル登録を解除しますか？')) {
+            let subscriptions = JSON.parse(localStorage.getItem('subscriptions') || '[]');
+            subscriptions = subscriptions.filter(s => s.id !== id);
+            localStorage.setItem('subscriptions', JSON.stringify(subscriptions));
+            loadSubscriptions();
+        }
+    }
+
+    window.onload = loadSubscriptions;
+</script>
+
+<style>
+    .subs-container {
+        max-width: 1284px;
+        margin: 0 auto;
+        padding: 24px 16px;
+        font-family: "Roboto", "Arial", sans-serif;
+        color: var(--text-color, #0f0f0f);
+    }
+
+    .subs-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .subs-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .subs-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .manage-btn {
+        background: none;
+        border: none;
+        color: #065fd4;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 8px 16px;
+        border-radius: 18px;
+        transition: background 0.2s;
+    }
+
+    .manage-btn:hover { background: rgba(6, 95, 212, 0.1); }
+    .manage-btn.active-manage { background: #065fd4; color: white; }
+
+    .view-mode-icons {
+        display: flex;
+        background: rgba(0,0,0,0.05);
+        padding: 2px;
+        border-radius: 8px;
+    }
+
+    [data-theme="dark"] .view-mode-icons { background: rgba(255,255,255,0.1); }
+
+    .icon-btn {
+        background: none;
+        border: none;
+        padding: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        border-radius: 6px;
+    }
+
+    .icon-btn svg { width: 20px; height: 20px; fill: #606060; }
+    [data-theme="dark"] .icon-btn svg { fill: #aaa; }
+
+    .icon-btn.active { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    [data-theme="dark"] .icon-btn.active { background: #3f3f3f; }
+    .icon-btn.active svg { fill: #0f0f0f; }
+    [data-theme="dark"] .icon-btn.active svg { fill: #fff; }
+
+    /* --- グリッドモード --- */
+    .subs-grid.mode-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 24px 16px;
+    }
+
+    .mode-grid .sub-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 12px;
+        border-radius: 12px;
+        position: relative;
+    }
+
+    .mode-grid .sub-avatar-wrapper {
+        width: 103px;
+        height: 103px;
+        margin-bottom: 12px;
+        border-radius: 50%;
+        overflow: hidden;
+    }
+
+    /* --- リストモード --- */
+    .subs-grid.mode-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .mode-list .sub-card {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        padding: 12px 16px;
+        border-radius: 12px;
+    }
+
+    .mode-list .sub-link {
+        display: flex;
+        align-items: center;
+        flex: 1;
+    }
+
+    .mode-list .sub-avatar-wrapper {
+        width: 50px;
+        height: 50px;
+        margin-right: 16px;
+        border-radius: 50%;
+        overflow: hidden;
+    }
+
+    .mode-list .sub-info { text-align: left; }
+
+    /* --- 共通コンポーネント --- */
+    .sub-card:hover { background: rgba(0, 0, 0, 0.05); }
+    [data-theme="dark"] .sub-card:hover { background: rgba(255, 255, 255, 0.1); }
+
+    .sub-link { text-decoration: none; color: inherit; }
+    .sub-avatar { width: 100%; height: 100%; object-fit: cover; }
+
+    .sub-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+    .sub-meta { font-size: 12px; color: #606060; }
+    [data-theme="dark"] .sub-meta { color: #aaa; }
+
+    .sub-actions-area {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .mode-list .sub-actions-area { margin-top: 0; }
+
+    .unsubscribe-btn {
+        background: rgba(0, 0, 0, 0.05);
+        border: none;
+        height: 36px;
+        padding: 0 16px;
+        border-radius: 18px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    [data-theme="dark"] .unsubscribe-btn { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+    .bell-btn {
+        background: none;
+        border: none;
+        padding: 6px;
+        cursor: pointer;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+    }
+
+    .bell-btn svg { width: 22px; height: 22px; fill: #606060; }
+    [data-theme="dark"] .bell-btn svg { fill: #aaa; }
+    .bell-btn:hover { background: rgba(0,0,0,0.1); }
+
+    /* 管理モード時の強調 */
+    .sub-card.manage-active {
+        outline: 2px solid #065fd4;
+        background: rgba(6, 95, 212, 0.05);
+    }
+
+    /* 空の状態 */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 400px;
+        text-align: center;
+    }
+
+    .empty-svg { width: 120px; height: 120px; fill: #909090; margin-bottom: 16px; }
+    .empty-title { font-size: 18px; font-weight: 500; }
+    .empty-desc { font-size: 14px; color: #606060; margin-bottom: 24px; }
+    .explore-btn { background: #065fd4; color: white; padding: 10px 24px; border-radius: 20px; text-decoration: none; font-weight: 500; }
+
+    @media (max-width: 480px) {
+        .mode-grid { grid-template-columns: 1fr; }
+        .mode-grid .sub-card { flex-direction: row; text-align: left; }
+        .mode-grid .sub-avatar-wrapper { width: 60px; height: 60px; margin: 0 16px 0 0; }
+        .mode-grid .sub-actions-area { margin: 0; }
+    }
+</style>
+{% endblock %}
