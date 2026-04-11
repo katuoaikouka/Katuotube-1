@@ -54,8 +54,8 @@
             const card = document.createElement('div');
             card.className = `sub-card ${isManageMode ? 'manage-active' : ''}`;
             
-            // 登録者数のフェイクデータ（見た目のため）
-            const fakeSubCount = sub.subCount || (Math.floor(Math.random() * 900) + 100) + "万";
+            // 修正箇所: データに subscribers があればそれを使用、なければランダム生成
+            const subCountText = sub.subscribers || (Math.floor(Math.random() * 900) + 100) + "万";
 
             card.innerHTML = `
                 <a href="/channel/${sub.id}" class="sub-link">
@@ -64,7 +64,7 @@
                     </div>
                     <div class="sub-info">
                         <div class="sub-name">${sub.name}</div>
-                        <div class="sub-meta">チャンネル登録者数 ${fakeSubCount}人</div>
+                        <div class="sub-meta">${subCountText}</div>
                     </div>
                 </a>
                 <div class="sub-actions-area">
