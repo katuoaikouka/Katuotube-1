@@ -183,11 +183,6 @@
             overflow: hidden;
         }
         [data-theme="dark"] .channel-icon-placeholder { background-color: #444; color: #fff; }
-        .channel-icon-placeholder img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
         .video-title {
             font-size: 1rem;
             font-weight: 500;
@@ -268,6 +263,10 @@
             <i class="fas fa-home"></i>
             <span>ホーム</span>
         </a>
+        <a href="/trending" class="sidebar-item">
+            <i class="fas fa-fire"></i>
+            <span>急上昇</span>
+        </a>
         <a href="/settings.html" class="sidebar-item">
             <i class="fas fa-cog"></i>
             <span>設定</span>
@@ -290,53 +289,18 @@
             <i class="fas fa-history"></i>
             <span>履歴</span>
         </a>
-        <a href="#" class="sidebar-item">
+        <a href="playlist.html" class="sidebar-item">
             <i class="fas fa-clock"></i>
-            <span>後で見る</span>
+            <span>プレイリスト</span>
         </a>
     </nav>
 
     <main id="main-content">
         {% block content %}
-        <h2 style="margin: 0 0 24px 0; font-size: 1.1rem; font-weight: 600;">{{ title if title else 'おすすめ' }}</h2>
-        
-        <div class="home-grid">
-            {% for video in videos %}
-            <a href="/watch?v={{ video.videoId }}" class="video-card">
-                <div class="thumbnail-container">
-                    <img src="/proxy/thumb?v={{ video.videoId }}" alt="{{ video.title }}" loading="lazy">
-                    {% if video.lengthSeconds %}
-                    <span class="video-duration">
-                        {% set mins = video.lengthSeconds // 60 %}
-                        {% set secs = video.lengthSeconds % 60 %}
-                        {{ mins }}:{{ "%02d" | format(secs) }}
-                    </span>
-                    {% endif %}
-                </div>
-                
-                <div class="video-info-grid">
-                    <div class="channel-icon-placeholder">
-                        {% if video.authorThumbnail %}
-                        <img src="{{ video.authorThumbnail }}" alt="{{ video.author }}" loading="lazy">
-                        {% else %}
-                        <span style="opacity: 0.7;">{{ video.author if video.author else '🐟' }}</span>
-                        {% endif %}
-                    </div>
-                    <div class="video-text">
-                        <h3 class="video-title">{{ video.title }}</h3>
-                        <div class="video-meta">
-                            <span>{{ video.author }}</span>
-                            <span>{{ video.viewCountText }} • {{ video.publishedText }}</span>
-                        </div>
-                    </div>
-                </div>
-            </a>
-            {% else %}
-            <div style="grid-column: 1 / -1; text-align: center; padding: 100px 0; color: #606060;">
-                <i class="fas fa-fish" style="font-size: 3rem; margin-bottom: 16px; opacity: 0.2;"></i>
-                <p>動画が見つかりませんでした。</p>
-            </div>
-            {% endfor %}
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; text-align: center;">
+            <i class="fas fa-search" style="font-size: 5rem; margin-bottom: 24px; opacity: 0.1;"></i>
+            <h2 style="font-size: 1.5rem; font-weight: 500; margin-bottom: 8px;">まずは検索してみましょう</h2>
+            <p style="color: #606060; font-size: 1rem;">おすすめ動画を表示するには、まず動画を視聴しましょう。</p>
         </div>
 
         <div class="site-modal-overlay" id="siteModal">
