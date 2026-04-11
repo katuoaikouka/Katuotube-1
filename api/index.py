@@ -840,6 +840,9 @@ def m3u8_proxy():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/subscribe.html')
+def subscribe():
+    return render_template('subscribe.html')
 
 
 if __name__ == '__main__':
