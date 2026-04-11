@@ -844,6 +844,10 @@ def m3u8_proxy():
 def subscribe():
     return render_template('subscribe.html')
 
+@app.route('/playlist.html')
+def playlist():
+    return render_template('playlist.html')
+
 
 if __name__ == '__main__':
     # threaded=True でマルチスレッドを有効化
