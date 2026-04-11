@@ -795,6 +795,52 @@ def trending():
     theme = request.cookies.get('theme', 'dark')
     return render_template('home.html', videos=trending_videos, theme=theme, title="急上昇")
 
+# --- 追加ルート: 新しいAPI形式に対応したm3u8取得 ---
+@app.route('/api/m3u8_proxy')
+@login_required
+def m3u8_proxy():
+    video_id = request.args.get('v')
+    if not video_id:
+        return jsonify({"error": "Video ID is required"}), 400
+
+    # 新しいAPIエンドポイント
+    NEW_M3U8_API = "https://meu8.vercel.app/m3u8/"
+
+    try:
+        # 指定されたAPIからデータを取得
+        res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=3.0)
+        if res.status_code == 200:
+            data = res.json()
+            
+            # 形式: {"resolution": "1280x720", "format": "m3u8", "url": "..."} のリストを想定
+            # dataがリスト形式、あるいは 'formats' などのキーに入っている場合に対応
+            formats = data if isinstance(data, list) else data.get('formats', [])
+            
+            if formats:
+                # 解像度（resolutionの後半数値）が高い順にソート
+                def get_res_value(f):
+                    res_str = f.get("resolution", "0x0")
+                    try:
+                        return int(res_str.split("x")[-1]) if "x" in res_str else 0
+                    except:
+                        return 0
+
+                sorted_formats = sorted(formats, key=get_res_value, reverse=True)
+                
+                # 最良画質のURLを返却
+                best_format = sorted_formats
+                return jsonify({
+                    "success": True,
+                    "m3u8_url": best_format.get('url'),
+                    "resolution": best_format.get('resolution'),
+                    "all_formats": sorted_formats
+                })
+        
+        return jsonify({"error": "m3u8 not found from new API"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 if __name__ == '__main__':
     # threaded=True でマルチスレッドを有効化
