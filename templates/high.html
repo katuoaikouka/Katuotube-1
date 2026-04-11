@@ -26,18 +26,14 @@
     <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
     <script>
         (function() {
-            const player = videojs('vid', {
-                autoplay: true,
-                playbackRates: [0.5, 1, 1.25, 1.5, 2]
-            });
-
+            const player = document.getElementById('vid');
             const audio = document.getElementById('sync-audio');
             const phaseText = document.getElementById('current-phase');
             
+            const videoId = "{{ video_id }}"; // サーバー側から渡される想定
             const urls = {
                 videoSplit: "{{ video_url | safe }}",
                 audioSplit: "{{ audio_url | safe }}",
-                m3u8: "{{ m3u8_url | safe }}",
                 fallback: "{{ fallback_url | safe }}"
             };
 
@@ -48,22 +44,39 @@
                 phaseText.innerText = text;
             }
 
+            async function fetchM3U8() {
+                try {
+                    const response = await fetch(`/api/m3u8_proxy?v=${videoId}`);
+                    const data = await response.json();
+                    if (data.success && data.m3u8_url) {
+                        return data.m3u8_url;
+                    }
+                } catch (e) {
+                    console.error("m3u8 fetch error", e);
+                }
+                return null;
+            }
+
             function trySync() {
                 if (urls.videoSplit && urls.audioSplit && urls.videoSplit !== 'None') {
                     updateStatus("高画質同期モード (1080p+)");
-                    player.src({ src: urls.videoSplit }); 
+                    player.src = urls.videoSplit; 
                     audio.src = urls.audioSplit;
                     setupSync();
+                    player.load();
+                    audio.load();
                     return true;
                 }
                 return false;
             }
 
-            function tryHLS() {
-                if (urls.m3u8 && urls.m3u8 !== 'None') {
+            async function tryHLS() {
+                const m3u8Url = await fetchM3U8();
+                if (m3u8Url) {
                     updateStatus("HLSストリームモード");
                     stopSync();
-                    player.src({ src: urls.m3u8, type: 'application/x-mpegURL' });
+                    player.src = m3u8Url;
+                    player.load();
                     return true;
                 }
                 return false;
@@ -73,44 +86,45 @@
                 if (urls.fallback && urls.fallback !== 'None') {
                     updateStatus("通常画質モード");
                     stopSync();
-                    player.src({ src: urls.fallback, type: 'video/mp4' });
+                    player.src = urls.fallback;
+                    player.load();
                     return true;
                 }
                 updateStatus("再生可能なソースがありません");
                 return false;
             }
 
-            function loadSource() {
+            async function loadSource() {
                 if (preferredMode === 'sync') {
-                    if (!trySync()) if (!tryHLS()) tryFallback();
+                    if (!trySync()) if (!(await tryHLS())) tryFallback();
                 } else {
-                    if (!tryHLS()) if (!trySync()) tryFallback();
+                    if (!(await tryHLS())) if (!trySync()) tryFallback();
                 }
             }
 
             function setupSync() {
-                player.off('play'); player.on('play', () => audio.play().catch(()=>{}));
-                player.off('pause'); player.on('pause', () => audio.pause());
-                player.off('ratechange'); player.on('ratechange', () => audio.playbackRate = player.playbackRate());
+                player.onplay = () => audio.play().catch(()=>{});
+                player.onpause = () => audio.pause();
+                player.onratechange = () => audio.playbackRate = player.playbackRate;
                 
-                player.off('seeking'); player.on('seeking', () => {
+                player.onseeking = () => {
                     audio.pause();
-                    audio.currentTime = player.currentTime();
-                });
+                    audio.currentTime = player.currentTime;
+                };
 
-                player.off('seeked'); player.on('seeked', () => {
-                    audio.currentTime = player.currentTime();
-                    if (!player.paused()) audio.play().catch(()=>{});
-                });
+                player.onseeked = () => {
+                    audio.currentTime = player.currentTime;
+                    if (!player.paused) audio.play().catch(()=>{});
+                };
 
-                player.off('waiting'); player.on('waiting', () => audio.pause());
-                player.off('playing'); player.on('playing', () => audio.play().catch(()=>{}));
+                player.onwaiting = () => audio.pause();
+                player.onplaying = () => audio.play().catch(()=>{});
 
                 if (window.syncInterval) clearInterval(window.syncInterval);
                 window.syncInterval = setInterval(() => {
-                    if (!player.paused()) {
-                        const diff = Math.abs(player.currentTime() - audio.currentTime);
-                        if (diff > 0.2) audio.currentTime = player.currentTime();
+                    if (!player.paused) {
+                        const diff = Math.abs(player.currentTime - audio.currentTime);
+                        if (diff > 0.2) audio.currentTime = player.currentTime;
                     }
                 }, 1000);
             }
@@ -119,17 +133,24 @@
                 if (window.syncInterval) clearInterval(window.syncInterval);
                 audio.pause();
                 audio.src = "";
+                player.onplay = null;
+                player.onpause = null;
+                player.onratechange = null;
+                player.onseeking = null;
+                player.onseeked = null;
+                player.onwaiting = null;
+                player.onplaying = null;
             }
 
-            player.on('error', function() {
+            player.onerror = async function() {
                 phase++;
                 if (phase === 1) {
-                    if (preferredMode === 'sync') tryHLS() || tryFallback();
+                    if (preferredMode === 'sync') (await tryHLS()) || tryFallback();
                     else trySync() || tryFallback();
                 } else {
                     tryFallback();
                 }
-            });
+            };
 
             loadSource();
         })();
