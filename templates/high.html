@@ -12,10 +12,39 @@
             position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(0,0,0,0.5);
             padding: 5px 10px; border-radius: 4px; z-index: 10; font-size: 12px; pointer-events: none;
         }
+
+        /* 独自の読み込みアニメーション */
+        #custom-loader {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 20; display: flex; flex-direction: column; align-items: center;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%; border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ミュート解除ボタン (公式再現スタイル) */
+        #unmute-button {
+            position: absolute; top: 20px; right: 20px; z-index: 30;
+            background: rgba(0, 0, 0, 0.8); color: white; border: none;
+            padding: 10px 15px; border-radius: 2px; cursor: pointer;
+            font-size: 14px; font-weight: bold; display: none; align-items: center;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        #unmute-button svg { margin-right: 8px; fill: white; }
     </style>
 </head>
 <body>
     <div id="status-overlay">モード: <span id="current-phase">読み込み中...</span></div>
+
+    <div id="custom-loader"><div class="spinner"></div></div>
+
+    <button id="unmute-button">
+        <svg height="24" viewBox="0 0 24 24" width="24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"></path></svg>
+        タップしてミュート解除
+    </button>
 
     <div class="player-box">
         <video id="vid" class="video-js vjs-default-skin vjs-big-play-centered" 
@@ -29,6 +58,8 @@
             const player = document.getElementById('vid');
             const audio = document.getElementById('sync-audio');
             const phaseText = document.getElementById('current-phase');
+            const loader = document.getElementById('custom-loader');
+            const unmuteBtn = document.getElementById('unmute-button');
             
             const videoId = "{{ video_id }}"; // サーバー側から渡される想定
             const urls = {
@@ -43,6 +74,20 @@
             function updateStatus(text) {
                 phaseText.innerText = text;
             }
+
+            // ローダー制御
+            player.addEventListener('waiting', () => loader.style.display = 'block');
+            player.addEventListener('playing', () => {
+                loader.style.display = 'none';
+                if (player.muted) unmuteBtn.style.display = 'flex';
+            });
+
+            // ミュート解除処理
+            unmuteBtn.onclick = () => {
+                player.muted = false;
+                audio.muted = false;
+                unmuteBtn.style.display = 'none';
+            };
 
             async function fetchM3U8() {
                 try {
@@ -95,11 +140,19 @@
             }
 
             async function loadSource() {
+                // 自動再生ポリシー対策で最初はミュート
+                player.muted = true;
+                audio.muted = true;
+
                 if (preferredMode === 'sync') {
                     if (!trySync()) if (!(await tryHLS())) tryFallback();
                 } else {
                     if (!(await tryHLS())) if (!trySync()) tryFallback();
                 }
+                player.play().catch(() => {
+                    // 自動再生失敗時はローダーを消してユーザー操作を待つ
+                    loader.style.display = 'none';
+                });
             }
 
             function setupSync() {
