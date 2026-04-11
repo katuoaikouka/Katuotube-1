@@ -762,6 +762,40 @@ def mix_stream():
         print(f"Error: {e}") # サーバーログに出力
         return jsonify({'error': str(e)}), 500
 
+@app.route('/trending')
+@login_required
+def trending():
+    # 指定されたGitHubのURLからトレンドデータを取得
+    TREND_URL = "https://raw.githubusercontent.com/siawaseok3/wakame/refs/heads/master/trend.json"
+    trending_videos = []
+    
+    try:
+        res = http_session.get(TREND_URL, timeout=2.0)
+        if res.status_code == 200:
+            data = res.json()
+            raw_list = data.get('trending', [])
+            
+            # JSONの形式をテンプレート(home.html)が期待するInvidious形式に変換
+            for item in raw_list:
+                trending_videos.append({
+                    "videoId": item.get("id"),
+                    "title": item.get("title"),
+                    "author": item.get("channel"),
+                    "authorId": item.get("channelId"),
+                    "videoThumbnails": [
+                        {"quality": "medium", "url": item.get("thumbnails", {}).get("medium", {}).get("url")}
+                    ],
+                    "viewCountText": item.get("viewCount", "0"),
+                    "publishedText": item.get("publishedAt", ""),
+                    "lengthSeconds": 0 # 必要に応じて解析が必要
+                })
+    except Exception as e:
+        print(f"Trend fetching error: {e}")
+
+    theme = request.cookies.get('theme', 'dark')
+    return render_template('home.html', videos=trending_videos, theme=theme, title="急上昇")
+
+
 if __name__ == '__main__':
     # threaded=True でマルチスレッドを有効化
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
