@@ -297,41 +297,11 @@
 
     <main id="main-content">
         {% block content %}
-        <h2 style="margin: 0 0 24px 0; font-size: 1.1rem; font-weight: 600;">{{ title if title else 'おすすめ' }}</h2>
-        
-        <div class="home-grid">
-            {% for video in videos %}
-            <a href="/watch?v={{ video.videoId }}" class="video-card">
-                <div class="thumbnail-container">
-                    <img src="/proxy/thumb?v={{ video.videoId }}" alt="{{ video.title }}" loading="lazy">
-                    {% if video.lengthSeconds %}
-                    <span class="video-duration">
-                        {% set mins = video.lengthSeconds // 60 %}
-                        {% set secs = video.lengthSeconds % 60 %}
-                        {{ mins }}:{{ "%02d" | format(secs) }}
-                    </span>
-                    {% endif %}
-                </div>
-                
-                <div class="video-info-grid">
-                    <div class="channel-icon-placeholder">
-                        <span style="opacity: 0.7;">{{ video.author if video.author else '🐟' }}</span>
-                    </div>
-                    <div class="video-text">
-                        <h3 class="video-title">{{ video.title }}</h3>
-                        <div class="video-meta">
-                            <span>{{ video.author }}</span>
-                            <span>{{ video.viewCountText }} • {{ video.publishedText }}</span>
-                        </div>
-                    </div>
-                </div>
-            </a>
-            {% else %}
-            <div style="grid-column: 1 / -1; text-align: center; padding: 100px 0; color: #606060;">
-                <i class="fas fa-fish" style="font-size: 3rem; margin-bottom: 16px; opacity: 0.2;"></i>
-                <p>動画が見つかりませんでした。</p>
+        <div style="display: flex; align-items: center; justify-content: center; height: 70vh; padding: 0 20px;">
+            <div style="background: var(--btn-bg); border: 1px solid var(--search-border); border-radius: 12px; padding: 32px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <h2 style="font-size: 1.5rem; font-weight: 500; margin-bottom: 12px; color: var(--text);">まずは検索してみましょう</h2>
+                <p style="color: #606060; font-size: 1rem; margin: 0; line-height: 1.5;">おすすめ動画を表示するには、まず動画を視聴しましょう。</p>
             </div>
-            {% endfor %}
         </div>
 
         <div class="site-modal-overlay" id="siteModal">
