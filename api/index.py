@@ -513,8 +513,8 @@ def high_quality_watch():
     video_url = None
     audio_url = None
 
-    # 映像ストリームの選定: 解像度の高い順にスキャン
-    # qualityLabel(1080p) と resolution(1920x1080) の両方の形式に対応できるよう調整
+    # 映像ストリームの選定: 同期再生用に映像のみ(video-only)の高画質webm/mp4を抽出
+    # target_resolutions の順にスキャン
     target_resolutions = ["2160", "1440", "1080", "720"]
     found_video = False
     for res_val in target_resolutions:
@@ -522,49 +522,38 @@ def high_quality_watch():
             f for f in adaptive 
             if res_val in str(f.get("qualityLabel") or f.get("resolution") or "")
             and (f.get("vcodec") != "none" or "video" in f.get("type", ""))
+            and (f.get("acodec") == "none" or "audio" not in f.get("type", "")) # 映像のみを優先
         ]
         if v_streams:
             # fpsが高いものを優先
-            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)[0]
+            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
             video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
             found_video = True
             break
     
-    # 万が一上記で見つからない場合、単純に最も高さ(height)があるものを選ぶ
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
-            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)[0]
+            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
             video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
 
-    # 音声ストリームの選定: 音質が最も良い（ビットレートが高い）ものを優先
+    # 音声ストリームの選定: 同期再生用に音声のみを抽出
     a_streams = [
         f for f in adaptive 
         if (f.get("acodec") != "none" or "audio" in f.get("type", ""))
         and (f.get("vcodec") == "none" or "video" not in f.get("type", ""))
     ]
     if a_streams:
+        # AUDIO_QUALITY_MEDIUM(通常最高音質)を探す
         a_stream_best = next((f for f in a_streams if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
-            a_stream_best = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)[0]
+            a_stream_best = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
         
         if a_stream_best and isinstance(a_stream_best, dict):
             audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
 
+    # m3u8はJavaScript側の fetchM3U8() が /api/m3u8_proxy から取得するため、ここではNoneまたは空で渡す
     m3u8_url = None
-    try:
-        hls_res = http_session.get(f"https://yudlp.vercel.app/m3u8/{v_id}", timeout=10)
-        hls_data = hls_res.json()
-        m3u8_formats = hls_data.get("m3u8_formats", [])
-        if m3u8_formats:
-            sorted_formats = sorted(
-                m3u8_formats,
-                key=lambda x: int(x.get("resolution", "0x0").split("x")[-1] if "x" in x.get("resolution", "") else 0),
-                reverse=True
-            )
-            m3u8_url = sorted_formats[0].get("url")
-    except Exception:
-        m3u8_url = base_sources.get('m3u8')
 
     return render_template('high.html', 
                            video_title=video_info.get('title', '高画質再生'),
