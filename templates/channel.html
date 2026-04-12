@@ -129,7 +129,7 @@
 
 <div class="channel-wrapper">
     {% if channel.authorBanners %}
-        <img src="{{ channel.authorBanners[0].url }}" class="channel-banner" alt="banner">
+        <img src="{{ channel.authorBanners.url }}" class="channel-banner" alt="banner">
     {% else %}
         <div class="channel-banner"></div>
     {% endif %}
@@ -139,7 +139,7 @@
         <div class="channel-text">
             <h1>{{ channel.author }}</h1>
             <div class="channel-stats">
-                <span>{{ channel.subCountText or '---' }} 登録者</span> • 
+                <span>{{ channel.subCountText or '0' }}</span> • 
                 <span>{{ channel.videoCount or '0' }} 本の動画</span>
             </div>
             <div class="video-meta" style="max-width: 600px;">
