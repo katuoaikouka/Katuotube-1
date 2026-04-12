@@ -397,13 +397,15 @@
             hls = null;
         }
 
-        if (mode === 'm3u8') {
+        // HLS (high または m3u8) の場合は iframeプレイヤー (m3u8.html相当) を利用
+        if (mode === 'm3u8' || mode === 'high') {
             videoPlayer.pause();
             videoPlayer.src = "";
             videoPlayer.load();
             videoPlayer.style.display = 'none';
             embedPlayer.style.display = 'block';
-            embedPlayer.src = `/high?v={{ video_id or video.videoId }}`;
+            // m3u8_proxy APIを利用する専用プレイヤーページをiframeで読み込む
+            embedPlayer.src = `/m3u8?v={{ video_id or video.videoId }}`;
             errorOverlay.style.display = 'none';
             fatalUI.style.display = 'none';
             isChangingMode = false;
@@ -428,39 +430,7 @@
         videoPlayer.removeAttribute('src');
         videoPlayer.load();
 
-        if (mode === 'high') {
-            if (Hls.isSupported()) {
-                hls = new Hls({ 
-                    maxBufferLength: 30,
-                    manifestLoadingMaxRetry: 3,
-                    manifestLoadingRetryDelay: 1000,
-                    enableWorker: true
-                });
-                hls.loadSource(url);
-                hls.attachMedia(videoPlayer);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    videoPlayer.play()
-                        .catch(() => console.log("Autoplay prevented."))
-                        .finally(() => { isChangingMode = false; });
-                });
-                hls.on(Hls.Events.ERROR, (e, data) => {
-                    if (data.fatal) {
-                        isChangingMode = false;
-                        handleAutoRetry();
-                    }
-                });
-            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                videoPlayer.src = url;
-                videoPlayer.addEventListener('loadedmetadata', () => {
-                    videoPlayer.play()
-                        .catch(() => {})
-                        .finally(() => { isChangingMode = false; });
-                }, { once: true });
-            } else {
-                isChangingMode = false;
-                changeMode('primary');
-            }
-        } else if (url && url !== 'None' && url !== '') {
+        if (url && url !== 'None' && url !== '') {
             videoPlayer.src = url;
             videoPlayer.play()
                 .catch(e => console.log("Playback failed"))
