@@ -508,45 +508,49 @@ def high_quality_watch():
     edu_source = request.cookies.get('edu_source', 'siawaseok')
     base_sources = get_stream_url(v_id, edu_source, video_info)
 
-    # analyze_videoのロジックを参考に、formatsとadaptiveFormatsの両方に対応
     adaptive = video_info.get("adaptiveFormats", []) or video_info.get("formats", [])
     video_url = None
     audio_url = None
 
-    # 映像ストリームの選定: 解像度の高い順にスキャン
-    # qualityLabel(1080p) と resolution(1920x1080) の両方の形式に対応できるよう調整
+    # 映像ストリームの選定: WebMかつ解像度の高い順
     target_resolutions = ["2160", "1440", "1080", "720"]
     found_video = False
     for res_val in target_resolutions:
+        # typeにvideoが含まれ、かつ containerまたはtypeにwebmが含まれるものを抽出
         v_streams = [
             f for f in adaptive 
             if res_val in str(f.get("qualityLabel") or f.get("resolution") or "")
             and (f.get("vcodec") != "none" or "video" in f.get("type", ""))
+            and ("webm" in str(f.get("type", "")).lower() or "vp9" in str(f.get("vcodec", "")).lower())
         ]
         if v_streams:
             # fpsが高いものを優先
-            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)[0]
+            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
             video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
             found_video = True
             break
     
-    # 万が一上記で見つからない場合、単純に最も高さ(height)があるものを選ぶ
+    # WebMで見つからなかった場合のフォールバック（高さ順）
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
-            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)[0]
+            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
             video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
 
-    # 音声ストリームの選定: 音質が最も良い（ビットレートが高い）ものを優先
+    # 音声ストリームの選定: WebM(Opus)を優先しつつ最高音質を選択
     a_streams = [
         f for f in adaptive 
         if (f.get("acodec") != "none" or "audio" in f.get("type", ""))
         and (f.get("vcodec") == "none" or "video" not in f.get("type", ""))
     ]
     if a_streams:
-        a_stream_best = next((f for f in a_streams if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
+        # WebMの音声を優先的に探す
+        a_streams_webm = [f for f in a_streams if "webm" in str(f.get("type", "")).lower()]
+        target_list = a_streams_webm if a_streams_webm else a_streams
+        
+        a_stream_best = next((f for f in target_list if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
-            a_stream_best = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)[0]
+            a_stream_best = sorted(target_list, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
         
         if a_stream_best and isinstance(a_stream_best, dict):
             audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
@@ -562,7 +566,7 @@ def high_quality_watch():
                 key=lambda x: int(x.get("resolution", "0x0").split("x")[-1] if "x" in x.get("resolution", "") else 0),
                 reverse=True
             )
-            m3u8_url = sorted_formats[0].get("url")
+            m3u8_url = sorted_formats.get("url")
     except Exception:
         m3u8_url = base_sources.get('m3u8')
 
@@ -574,6 +578,7 @@ def high_quality_watch():
                            m3u8_url=m3u8_url,
                            fallback_url=base_sources.get('primary'),
                            preferred_mode=preferred_mode)
+
 
 @app.errorhandler(404)
 def page_not_found(e):
