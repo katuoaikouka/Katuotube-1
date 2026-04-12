@@ -785,6 +785,7 @@ def trending():
     theme = request.cookies.get('theme', 'dark')
     return render_template('home.html', videos=trending_videos, theme=theme, title="急上昇")
 
+
 # --- 追加ルート: 新しいAPI形式に対応したm3u8取得 ---
 @app.route('/api/m3u8_proxy')
 @login_required
