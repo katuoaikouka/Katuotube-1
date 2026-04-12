@@ -508,15 +508,15 @@ def high_quality_watch():
     edu_source = request.cookies.get('edu_source', 'siawaseok')
     base_sources = get_stream_url(v_id, edu_source, video_info)
 
+    # analyze_videoのロジックを参考に、formatsとadaptiveFormatsの両方に対応
     adaptive = video_info.get("adaptiveFormats", []) or video_info.get("formats", [])
     video_url = None
     audio_url = None
 
-    # 映像ストリームの選定: WebMかつ解像度の高い順
+    # 映像ストリームの選定: WebMかつ解像度の高い順にスキャン
     target_resolutions = ["2160", "1440", "1080", "720"]
     found_video = False
     for res_val in target_resolutions:
-        # typeにvideoが含まれ、かつ containerまたはtypeにwebmが含まれるものを抽出
         v_streams = [
             f for f in adaptive 
             if res_val in str(f.get("qualityLabel") or f.get("resolution") or "")
@@ -526,34 +526,36 @@ def high_quality_watch():
         if v_streams:
             # fpsが高いものを優先
             v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
-            video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
+            # 取得先を yudlp.vercel.app/stream/ に変更
+            video_url = f"https://yudlp.vercel.app/stream/{v_id}?url={quote(v_stream.get('url'))}"
             found_video = True
             break
     
-    # WebMで見つからなかった場合のフォールバック（高さ順）
+    # 万が一上記で見つからない場合、単純に最も高さ(height)があるものを選ぶ
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
             v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
-            video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
+            video_url = f"https://yudlp.vercel.app/stream/{v_id}?url={quote(v_stream.get('url'))}"
 
-    # 音声ストリームの選定: WebM(Opus)を優先しつつ最高音質を選択
+    # 音声ストリームの選定: 音質が最も良い（ビットレートが高い）ものを優先
     a_streams = [
         f for f in adaptive 
         if (f.get("acodec") != "none" or "audio" in f.get("type", ""))
         and (f.get("vcodec") == "none" or "video" not in f.get("type", ""))
     ]
     if a_streams:
-        # WebMの音声を優先的に探す
+        # WebMの音声を優先
         a_streams_webm = [f for f in a_streams if "webm" in str(f.get("type", "")).lower()]
         target_list = a_streams_webm if a_streams_webm else a_streams
-        
+
         a_stream_best = next((f for f in target_list if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
             a_stream_best = sorted(target_list, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
         
         if a_stream_best and isinstance(a_stream_best, dict):
-            audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
+            # 取得先を yudlp.vercel.app/stream/ に変更
+            audio_url = f"https://yudlp.vercel.app/stream/{v_id}?url={quote(a_stream_best.get('url'))}"
 
     m3u8_url = None
     try:
@@ -578,7 +580,7 @@ def high_quality_watch():
                            m3u8_url=m3u8_url,
                            fallback_url=base_sources.get('primary'),
                            preferred_mode=preferred_mode)
-
+ 
 
 @app.errorhandler(404)
 def page_not_found(e):
