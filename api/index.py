@@ -525,17 +525,17 @@ def high_quality_watch():
             and (f.get("acodec") == "none" or "audio" not in f.get("type", "")) # 映像のみを優先
         ]
         if v_streams:
-            # fpsが高いものを優先
-            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
-            video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
+            # fpsが高いものを優先。sortedの結果はリストなので最初の要素を取得
+            v_stream_list = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
+            video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
             found_video = True
             break
     
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
-            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
-            video_url = f"/proxy/video?url={quote(v_stream.get('url'))}"
+            v_stream_list = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
+            video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
 
     # 音声ストリームの選定: 同期再生用に音声のみを抽出
     a_streams = [
@@ -547,7 +547,9 @@ def high_quality_watch():
         # AUDIO_QUALITY_MEDIUM(通常最高音質)を探す
         a_stream_best = next((f for f in a_streams if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
-            a_stream_best = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
+            # リストをソートして最初の要素を取得
+            a_stream_list = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
+            a_stream_best = a_stream_list
         
         if a_stream_best and isinstance(a_stream_best, dict):
             audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
@@ -563,7 +565,6 @@ def high_quality_watch():
                            m3u8_url=m3u8_url,
                            fallback_url=base_sources.get('primary'),
                            preferred_mode=preferred_mode)
-
 
 
 @app.errorhandler(404)
