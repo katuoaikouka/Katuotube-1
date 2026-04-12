@@ -30,7 +30,7 @@
             const audio = document.getElementById('sync-audio');
             const phaseText = document.getElementById('current-phase');
             
-            const videoId = "{{ video_id }}"; // サーバー側から渡される想定
+            const videoId = "{{ video_id }}"; 
             const urls = {
                 videoSplit: "{{ video_url | safe }}",
                 audioSplit: "{{ audio_url | safe }}",
@@ -59,7 +59,7 @@
 
             function trySync() {
                 if (urls.videoSplit && urls.audioSplit && urls.videoSplit !== 'None') {
-                    updateStatus("高画質同期モード (1080p+)");
+                    updateStatus("高画質同期モード (WebM 1080p+)");
                     player.src = urls.videoSplit; 
                     audio.src = urls.audioSplit;
                     setupSync();
