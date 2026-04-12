@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U8 Proxy Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { font-family: sans-serif; background: #000; color: #fff; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 800px; margin-top: 20px; padding: 0 10px; box-sizing: border-box; }
+        video { width: 100%; background: #000; border: 1px solid #333; aspect-ratio: 16 / 9; }
+        .controls { margin-top: 15px; padding: 15px; background: #222; border-radius: 5px; }
+        select { padding: 8px; border-radius: 3px; background: #444; color: #fff; border: none; width: 100%; max-width: 200px; cursor: pointer; }
+        .info { margin-bottom: 10px; font-size: 14px; color: #ccc; }
+        .error { color: #ff5555; font-weight: bold; }
+        label { display: block; margin-bottom: 5px; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="status" class="info">読み込み中...</div>
+    
+    <video id="video" controls playsinline></video>
+
+    <div class="controls">
+        <label for="qualitySelect">画質選択:</label>
+        <select id="qualitySelect">
+            <option value="">取得中...</option>
+        </select>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const statusDiv = document.getElementById('status');
+    const qualitySelect = document.getElementById('qualitySelect');
+
+    // URLパラメータからvideo_idを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoId = urlParams.get('v');
+
+    if (!videoId) {
+        statusDiv.innerHTML = '<span class="error">エラー: 動画ID (?v=...) が指定されていません。</span>';
+    } else {
+        fetchData(videoId);
+    }
+
+    async function fetchData(v) {
+        try {
+            // Flaskエンドポイントを叩く
+            const response = await fetch(`/api/m3u8_proxy?v=${v}`);
+            const data = await response.json();
+
+            if (data.success) {
+                // バックエンドのコードで best_format がリストそのものになっている可能性があるため
+                // フロント側で安全に最初の要素（最高画質）を取得
+                let bestUrl = data.m3u8_url;
+                let resolution = data.resolution;
+
+                if (Array.isArray(data.all_formats) && data.all_formats.length > 0) {
+                    if (!bestUrl) bestUrl = data.all_formats.url;
+                    if (!resolution) resolution = data.all_formats.resolution;
+                }
+
+                if (!bestUrl) {
+                    statusDiv.innerHTML = '<span class="error">エラー: 再生可能なURLが見つかりませんでした。</span>';
+                    return;
+                }
+
+                statusDiv.innerHTML = `再生中: ${resolution || '不明'}`;
+                setupPlayer(bestUrl);
+                
+                if (data.all_formats) {
+                    setupQualitySelector(data.all_formats, bestUrl);
+                }
+            } else {
+                statusDiv.innerHTML = `<span class="error">エラー: ${data.error}</span>`;
+            }
+        } catch (e) {
+            statusDiv.innerHTML = `<span class="error">通信エラー: ${e.message}</span>`;
+            console.error(e);
+        }
+    }
+
+    function setupPlayer(url) {
+        if (Hls.isSupported()) {
+            if (window.hls) {
+                window.hls.destroy();
+            }
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                video.play().catch(() => console.log("Auto-play blocked"));
+            });
+            window.hls = hls;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari / iOS 用のネイティブ再生
+            video.src = url;
+            video.addEventListener('loadedmetadata', function() {
+                video.play().catch(() => console.log("Auto-play blocked"));
+            });
+        } else {
+            statusDiv.innerHTML = '<span class="error">お使いのブラウザはHLS再生に対応していません。</span>';
+        }
+    }
+
+    function setupQualitySelector(formats, currentUrl) {
+        qualitySelect.innerHTML = '';
+        
+        formats.forEach(f => {
+            const option = document.createElement('option');
+            option.value = f.url;
+            option.textContent = f.resolution || 'Unknown';
+            if (f.url === currentUrl) option.selected = true;
+            qualitySelect.appendChild(option);
+        });
+
+        // 既存のイベントリスナーをリセットするためクローン
+        const newSelect = qualitySelect.cloneNode(true);
+        qualitySelect.parentNode.replaceChild(newSelect, qualitySelect);
+
+        newSelect.addEventListener('change', (e) => {
+            const newUrl = e.target.value;
+            if (!newUrl) return;
+
+            const currentTime = video.currentTime;
+            const isPaused = video.paused;
+
+            setupPlayer(newUrl);
+
+            // シームレスに近い切り替えのために再生位置を復元
+            const onMetadata = () => {
+                video.currentTime = currentTime;
+                if (!isPaused) video.play();
+                video.removeEventListener('loadedmetadata', onMetadata);
+            };
+            video.addEventListener('loadedmetadata', onMetadata);
+            
+            const selectedText = newSelect.options[newSelect.selectedIndex].text;
+            statusDiv.innerText = `画質変更: ${selectedText}`;
+        });
+    }
+</script>
+
+</body>
+</html>
