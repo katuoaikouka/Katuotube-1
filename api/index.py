@@ -489,7 +489,7 @@ def high_quality_watch():
         return redirect(url_for('index'))
 
     preferred_mode = request.cookies.get('player_mode', 'hls')
-    target_instance = "https://invidious.f5.si/"
+    target_instance = "https://yt.omada.cafe"
     video_info = None
 
     try:
@@ -527,15 +527,17 @@ def high_quality_watch():
         if v_streams:
             # fpsが高いものを優先。sortedの結果はリストなので最初の要素を取得
             v_stream_list = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
-            video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
-            found_video = True
-            break
+            if v_stream_list:
+                video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
+                found_video = True
+                break
     
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
             v_stream_list = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
-            video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
+            if v_stream_list:
+                video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
 
     # 音声ストリームの選定: 同期再生用に音声のみを抽出
     a_streams = [
@@ -549,7 +551,8 @@ def high_quality_watch():
         if not a_stream_best:
             # リストをソートして最初の要素を取得
             a_stream_list = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
-            a_stream_best = a_stream_list
+            if a_stream_list:
+                a_stream_best = a_stream_list
         
         if a_stream_best and isinstance(a_stream_best, dict):
             audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
@@ -565,7 +568,6 @@ def high_quality_watch():
                            m3u8_url=m3u8_url,
                            fallback_url=base_sources.get('primary'),
                            preferred_mode=preferred_mode)
-
 
 @app.errorhandler(404)
 def page_not_found(e):
