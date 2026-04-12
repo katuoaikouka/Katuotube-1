@@ -488,10 +488,12 @@ def high_quality_watch():
     if not v_id:
         return redirect(url_for('index'))
 
+    # HTML側の preferredMode = "{{ preferred_mode }}" に対応
     preferred_mode = request.cookies.get('player_mode', 'hls')
-    target_instance = "https://yt.omada.cafe"
+    target_instance = "https://invidious.f5.si"
     video_info = None
 
+    # インスタンスから動画情報を取得
     try:
         res = http_session.get(f"{target_instance}/api/v1/videos/{v_id}", timeout=5, headers=get_random_headers())
         if res.status_code == 200:
@@ -499,65 +501,70 @@ def high_quality_watch():
     except Exception:
         pass
 
+    # 失敗した場合はフォールバックのAPIを叩く
     if not video_info:
         video_info = request_invidious_api(f"/videos/{v_id}")
 
     if not video_info:
         return "動画データの取得に失敗しました。時間をおいて試してください。", 404
 
+    # HTML側の urls.fallback に対応
     edu_source = request.cookies.get('edu_source', 'siawaseok')
     base_sources = get_stream_url(v_id, edu_source, video_info)
 
-    # analyze_videoのロジックを参考に、formatsとadaptiveFormatsの両方に対応
+    # ストリームリストの抽出
     adaptive = video_info.get("adaptiveFormats", []) or video_info.get("formats", [])
     video_url = None
     audio_url = None
 
-    # 映像ストリームの選定: 同期再生用に映像のみ(video-only)の高画質webm/mp4を抽出
-    # target_resolutions の順にスキャン
+    # --- 映像ストリーム（video-only）の選定 ---
+    # HTML側の urls.videoSplit に対応
     target_resolutions = ["2160", "1440", "1080", "720"]
     found_video = False
+    
     for res_val in target_resolutions:
         v_streams = [
             f for f in adaptive 
             if res_val in str(f.get("qualityLabel") or f.get("resolution") or "")
             and (f.get("vcodec") != "none" or "video" in f.get("type", ""))
-            and (f.get("acodec") == "none" or "audio" not in f.get("type", "")) # 映像のみを優先
+            and (f.get("acodec") == "none" or "audio" not in f.get("type", ""))
         ]
         if v_streams:
-            # fpsが高いものを優先。sortedの結果はリストなので最初の要素を取得
+            # fpsが高い順にソートし、最初の要素を安全に取得
             v_stream_list = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
-            if v_stream_list:
+            if v_stream_list and v_stream_list.get('url'):
                 video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
                 found_video = True
                 break
     
+    # 指定解像度が見つからない場合のフォールバック（高さを持つストリームを優先）
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
             v_stream_list = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
-            if v_stream_list:
+            if v_stream_list and v_stream_list.get('url'):
                 video_url = f"/proxy/video?url={quote(v_stream_list.get('url'))}"
 
-    # 音声ストリームの選定: 同期再生用に音声のみを抽出
+    # --- 音声ストリーム（audio-only）の選定 ---
+    # HTML側の urls.audioSplit に対応
     a_streams = [
         f for f in adaptive 
         if (f.get("acodec") != "none" or "audio" in f.get("type", ""))
         and (f.get("vcodec") == "none" or "video" not in f.get("type", ""))
     ]
     if a_streams:
-        # AUDIO_QUALITY_MEDIUM(通常最高音質)を探す
+        # まずはAUDIO_QUALITY_MEDIUM(YouTubeの標準最高音質)を探す
         a_stream_best = next((f for f in a_streams if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
-            # リストをソートして最初の要素を取得
+            # なければビットレート順にソートして最上位を取得
             a_stream_list = sorted(a_streams, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
             if a_stream_list:
                 a_stream_best = a_stream_list
         
-        if a_stream_best and isinstance(a_stream_best, dict):
+        if a_stream_best and isinstance(a_stream_best, dict) and a_stream_best.get('url'):
             audio_url = f"/proxy/video?url={quote(a_stream_best.get('url'))}"
 
-    # m3u8はJavaScript側の fetchM3U8() が /api/m3u8_proxy から取得するため、ここではNoneまたは空で渡す
+    # m3u8_url は JavaScript 側の fetchM3U8() で非同期取得するため、ここでは None で固定
     m3u8_url = None
 
     return render_template('high.html', 
