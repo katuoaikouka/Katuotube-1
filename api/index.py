@@ -834,10 +834,9 @@ def subscribe():
 def playlist():
     return render_template('playlist.html')
 
-@app.route('/m3u8.html')
-def m3u8 ():
-    return render_template('/m3u8.html')
-
+@@app.route('/m3u8.html')
+def playlist():
+    return render_template('m3u8.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
