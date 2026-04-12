@@ -489,7 +489,7 @@ def high_quality_watch():
         return redirect(url_for('index'))
 
     preferred_mode = request.cookies.get('player_mode', 'hls')
-    target_instance = "https://yt.omada.cafe"
+    target_instance = "https://invidious.f5.si"
     video_info = None
 
     try:
