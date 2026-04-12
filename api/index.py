@@ -586,7 +586,10 @@ def channel(cid):
     channel_info = request_invidious_api(f"/channels/{cid}")
     if not channel_info:
         return "チャンネルが見つかりません", 404
+    
+    # 動画リストの取得
     videos = channel_info.get('latestVideos', [])
+    
     return render_template('channel.html', channel=channel_info, videos=videos)
 
 @app.route('/contact.html')
