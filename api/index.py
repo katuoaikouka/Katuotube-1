@@ -835,7 +835,7 @@ def playlist():
     return render_template('playlist.html')
 
 @@app.route('/m3u8.html')
-def playlist():
+def m3u8():
     return render_template('m3u8.html')
 
 if __name__ == '__main__':
