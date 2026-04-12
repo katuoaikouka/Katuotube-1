@@ -8,50 +8,14 @@
     <style>
         body { background-color: #000; margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .player-box { width: 100vw; height: 100vh; background: #000; display: flex; align-items: center; justify-content: center; }
-        
-        /* ビデオ要素標準の読み込みスピナーを強制非表示 (ブラウザ依存の対策) */
-        video::-webkit-media-controls-panel { z-index: 1; }
-        video::-webkit-media-controls-loading-indicator { display: none !important; -webkit-appearance: none; }
-
         #status-overlay {
             position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(0,0,0,0.5);
             padding: 5px 10px; border-radius: 4px; z-index: 10; font-size: 12px; pointer-events: none;
         }
-
-        /* 読み込みアニメーションを最前面・巨大化 */
-        #custom-loader {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.2); /* 背景をわずかに暗くしてビデオ上の視認性を確保 */
-            z-index: 2147483647; display: flex; align-items: center; justify-content: center;
-            pointer-events: none;
-        }
-        .spinner {
-            width: 100px; height: 100px; /* サイズを大きく変更 */
-            border: 6px solid rgba(255,255,255,0.2);
-            border-radius: 50%; border-top-color: #fff;
-            animation: spin 0.8s linear infinite; /* 速度を少し速めてよりスムーズに */
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        #unmute-button {
-            position: absolute; top: 20px; right: 20px; z-index: 30;
-            background: rgba(0, 0, 0, 0.8); color: white; border: none;
-            padding: 10px 15px; border-radius: 2px; cursor: pointer;
-            font-size: 14px; font-weight: bold; display: none; align-items: center;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
-        #unmute-button svg { margin-right: 8px; fill: white; }
     </style>
 </head>
 <body>
     <div id="status-overlay">モード: <span id="current-phase">読み込み中...</span></div>
-
-    <div id="custom-loader"><div class="spinner"></div></div>
-
-    <button id="unmute-button">
-        <svg height="24" viewBox="0 0 24 24" width="24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"></path></svg>
-        タップしてミュート解除
-    </button>
 
     <div class="player-box">
         <video id="vid" class="video-js vjs-default-skin vjs-big-play-centered" 
@@ -59,17 +23,14 @@
         <audio id="sync-audio" style="display:none;" preload="auto"></audio>
     </div>
 
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
     <script>
         (function() {
             const player = document.getElementById('vid');
             const audio = document.getElementById('sync-audio');
             const phaseText = document.getElementById('current-phase');
-            const loader = document.getElementById('custom-loader');
-            const unmuteBtn = document.getElementById('unmute-button');
             
-            const urlParams = new URLSearchParams(window.location.search);
-            const videoId = "{{ video_id }}" || urlParams.get('v');
-
+            const videoId = "{{ video_id }}"; // サーバー側から渡される想定
             const urls = {
                 videoSplit: "{{ video_url | safe }}",
                 audioSplit: "{{ audio_url | safe }}",
@@ -83,35 +44,21 @@
                 phaseText.innerText = text;
             }
 
-            // ローダーの表示制御を強化
-            player.addEventListener('waiting', () => loader.style.display = 'flex');
-            player.addEventListener('loadstart', () => loader.style.display = 'flex');
-            player.addEventListener('canplay', () => loader.style.display = 'none');
-            player.addEventListener('playing', () => {
-                loader.style.display = 'none';
-                if (player.muted) unmuteBtn.style.display = 'flex';
-            });
-
-            unmuteBtn.onclick = () => {
-                player.muted = false;
-                audio.muted = false;
-                unmuteBtn.style.display = 'none';
-            };
-
             async function fetchM3U8() {
-                if (!videoId) return null;
                 try {
                     const response = await fetch(`/api/m3u8_proxy?v=${videoId}`);
-                    if (!response.ok) return null;
                     const data = await response.json();
-                    return (data.success && data.m3u8_url) ? data.m3u8_url : null;
+                    if (data.success && data.m3u8_url) {
+                        return data.m3u8_url;
+                    }
                 } catch (e) {
-                    return null;
+                    console.error("m3u8 fetch error", e);
                 }
+                return null;
             }
 
             function trySync() {
-                if (urls.videoSplit && urls.videoSplit !== 'None' && urls.videoSplit !== '') {
+                if (urls.videoSplit && urls.audioSplit && urls.videoSplit !== 'None') {
                     updateStatus("高画質同期モード (1080p+)");
                     player.src = urls.videoSplit; 
                     audio.src = urls.audioSplit;
@@ -136,37 +83,22 @@
             }
 
             function tryFallback() {
-                if (urls.fallback && urls.fallback !== 'None' && urls.fallback !== '') {
+                if (urls.fallback && urls.fallback !== 'None') {
                     updateStatus("通常画質モード");
                     stopSync();
                     player.src = urls.fallback;
                     player.load();
                     return true;
                 }
-                updateStatus("再生エラー: ソースが見つかりません");
-                loader.style.display = 'none';
+                updateStatus("再生可能なソースがありません");
                 return false;
             }
 
             async function loadSource() {
-                player.muted = true;
-                audio.muted = true;
-
-                try {
-                    if (preferredMode === 'sync') {
-                        if (!trySync()) {
-                            if (!(await tryHLS())) tryFallback();
-                        }
-                    } else {
-                        if (!(await tryHLS())) {
-                            if (!trySync()) tryFallback();
-                        }
-                    }
-                    player.play().catch(() => {
-                        loader.style.display = 'none';
-                    });
-                } catch (err) {
-                    tryFallback();
+                if (preferredMode === 'sync') {
+                    if (!trySync()) if (!(await tryHLS())) tryFallback();
+                } else {
+                    if (!(await tryHLS())) if (!trySync()) tryFallback();
                 }
             }
 
@@ -178,13 +110,13 @@
                 player.onseeking = () => {
                     audio.pause();
                     audio.currentTime = player.currentTime;
-                    loader.style.display = 'flex';
                 };
+
                 player.onseeked = () => {
                     audio.currentTime = player.currentTime;
                     if (!player.paused) audio.play().catch(()=>{});
-                    loader.style.display = 'none';
                 };
+
                 player.onwaiting = () => audio.pause();
                 player.onplaying = () => audio.play().catch(()=>{});
 
@@ -201,8 +133,13 @@
                 if (window.syncInterval) clearInterval(window.syncInterval);
                 audio.pause();
                 audio.src = "";
-                player.onplay = player.onpause = player.onratechange = 
-                player.onseeking = player.onseeked = player.onwaiting = player.onplaying = null;
+                player.onplay = null;
+                player.onpause = null;
+                player.onratechange = null;
+                player.onseeking = null;
+                player.onseeked = null;
+                player.onwaiting = null;
+                player.onplaying = null;
             }
 
             player.onerror = async function() {
