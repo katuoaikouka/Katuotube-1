@@ -825,6 +825,7 @@ def m3u8_proxy():
         return jsonify({"error": "m3u8 not found from new API"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 @app.route('/subscribe.html')
 def subscribe():
     return render_template('subscribe.html')
