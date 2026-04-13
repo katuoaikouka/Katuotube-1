@@ -792,9 +792,31 @@ def m3u8_proxy():
 
     # 新しいAPIエンドポイント
     NEW_M3U8_API = "https://meu8.vercel.app/m3u8/"
+    HIGH_QUALITY_API = "https://meu8.vercel.app/m3u8/high/"
 
     try:
-        # 指定されたAPIからデータを取得 (タイムアウトを15秒に設定)
+        # 最優先: 高画質専用APIから取得
+        high_res = http_session.get(f"{HIGH_QUALITY_API}{video_id}", timeout=15.0)
+        if high_res.status_code == 200:
+            high_data = high_res.json()
+            high_url = high_data.get('url')
+            if high_url:
+                # 全画質リストもメニュー用に取得しておく
+                res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=15.0)
+                formats = []
+                if res.status_code == 200:
+                    data = res.json()
+                    formats = data if isinstance(data, list) else data.get('formats', [])
+
+                return jsonify({
+                    "success": True,
+                    "m3u8_url": high_url,
+                    "resolution": "High Quality",
+                    "format": "m3u8",
+                    "all_formats": formats
+                })
+
+        # 予備: 通常のAPIからデータを取得
         res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=15.0)
         if res.status_code == 200:
             data = res.json()
@@ -813,7 +835,7 @@ def m3u8_proxy():
 
                 sorted_formats = sorted(formats, key=get_res_value, reverse=True)
                 
-                # 【修正箇所】リストの最初の要素（辞書）を取り出す
+                # リストの最初の要素（辞書）を取り出す
                 best_format = sorted_formats
                 
                 return jsonify({
