@@ -813,8 +813,9 @@ def m3u8_proxy():
 
                 sorted_formats = sorted(formats, key=get_res_value, reverse=True)
                 
-                # 最高画質のフォーマットを取得 (インデックス0を指定)
-                best_format = sorted_formats
+                # 【重要修正】リストの最初の要素（辞書）を取り出す
+                best_format = sorted_formats 
+                
                 return jsonify({
                     "success": True,
                     "m3u8_url": best_format.get('url'),
@@ -824,6 +825,7 @@ def m3u8_proxy():
         
         return jsonify({"error": "m3u8 not found from new API"}), 404
     except Exception as e:
+        # エラー内容を詳しく返す
         return jsonify({"error": str(e)}), 500
 
 @app.route('/subscribe.html')
