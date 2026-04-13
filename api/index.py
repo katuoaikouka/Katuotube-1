@@ -797,35 +797,19 @@ def m3u8_proxy():
     try:
         # 最優先: 高画質専用APIから取得
         high_res = http_session.get(f"{HIGH_QUALITY_API}{video_id}", timeout=15.0)
+        high_url = None
         if high_res.status_code == 200:
             high_data = high_res.json()
             high_url = high_data.get('url')
-            if high_url:
-                # 全画質リストもメニュー用に取得しておく
-                res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=15.0)
-                formats = []
-                if res.status_code == 200:
-                    data = res.json()
-                    formats = data if isinstance(data, list) else data.get('formats', [])
 
-                return jsonify({
-                    "success": True,
-                    "m3u8_url": high_url,
-                    "resolution": "High Quality",
-                    "format": "m3u8",
-                    "all_formats": formats
-                })
-
-        # 予備: 通常のAPIからデータを取得
+        # 全画質リストを取得 (メニュー生成および予備用)
         res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=15.0)
         if res.status_code == 200:
             data = res.json()
-            
-            # 形式: [{"resolution": "...", "format": "...", "url": "..."}] のリストを取得
             formats = data if isinstance(data, list) else data.get('formats', [])
             
             if formats:
-                # 解像度（resolutionの後半数値）が高い順にソート
+                # 解像度順にソート
                 def get_res_value(f):
                     res_str = f.get("resolution", "0x0")
                     try:
@@ -835,14 +819,20 @@ def m3u8_proxy():
 
                 sorted_formats = sorted(formats, key=get_res_value, reverse=True)
                 
-                # リストの最初の要素（辞書）を取り出す
-                best_format = sorted_formats
-                
+                # high_urlがあればそれを使い、なければsorted_formatsの先頭を使う
+                if high_url:
+                    final_url = high_url
+                    final_res = "High Quality"
+                else:
+                    best_format = sorted_formats # リストの0番目を辞書として取得
+                    final_url = best_format.get('url')
+                    final_res = best_format.get('resolution')
+
                 return jsonify({
                     "success": True,
-                    "m3u8_url": best_format.get('url'),
-                    "resolution": best_format.get('resolution'),
-                    "format": best_format.get('format', 'm3u8'),
+                    "m3u8_url": final_url,
+                    "resolution": final_res,
+                    "format": "m3u8",
                     "all_formats": sorted_formats
                 })
         
