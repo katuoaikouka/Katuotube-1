@@ -12,9 +12,19 @@
         .loader { position: absolute; width: 60px; height: 60px; border: 5px solid rgba(255,255,255,0.2); border-top: 5px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; display: none; z-index: 10; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* ミュート解除ボタン (YouTube公式再現) */
+        /* ミュート解除ボタン */
         #unmute-overlay { position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 12px 16px; border-radius: 2px; cursor: pointer; z-index: 40; display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: uppercase; font-weight: 500; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.1); }
         #unmute-overlay:hover { background: rgba(30, 30, 30, 0.9); }
+
+        /* 画質設定ボタン (YouTube風) */
+        #settings-btn { position: absolute; bottom: 50px; right: 20px; background: none; border: none; color: white; cursor: pointer; z-index: 50; opacity: 0.8; }
+        #settings-btn:hover { opacity: 1; }
+        
+        /* 画質メニュー */
+        #quality-menu { position: absolute; bottom: 80px; right: 20px; background: rgba(28, 28, 28, 0.9); border-radius: 12px; display: none; flex-direction: column; z-index: 60; min-width: 120px; padding: 8px 0; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+        .quality-item { padding: 10px 20px; color: white; cursor: pointer; font-size: 14px; text-align: left; }
+        .quality-item:hover { background: rgba(255, 255, 255, 0.1); }
+        .quality-item.active { color: #f00; font-weight: bold; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
@@ -28,12 +38,21 @@
         </div>
 
         <video id="v" controls autoplay playsinline muted></video>
+
+        <button id="settings-btn">
+            <svg style="width:28px;height:28px" viewBox="0 0 24 24"><path fill="currentColor" d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.97 19.05,5.05L16.56,6.05C16.04,5.65 15.44,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.56,5.32 7.96,5.65 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.56,18.67 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.44,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" /></svg>
+        </button>
+        <div id="quality-menu"></div>
     </div>
 
     <script>
         const video = document.getElementById('v');
         const loader = document.getElementById('loader');
         const unmuteOverlay = document.getElementById('unmute-overlay');
+        const settingsBtn = document.getElementById('settings-btn');
+        const qualityMenu = document.getElementById('quality-menu');
+
+        let hls = null;
 
         // ミュート解除処理
         unmuteOverlay.onclick = (e) => {
@@ -42,15 +61,46 @@
             unmuteOverlay.style.display = 'none';
         };
 
+        // メニュー開閉
+        settingsBtn.onclick = (e) => {
+            e.stopPropagation();
+            qualityMenu.style.display = qualityMenu.style.display === 'flex' ? 'none' : 'flex';
+        };
+
+        document.addEventListener('click', () => {
+            qualityMenu.style.display = 'none';
+        });
+
         // イベントリスナー
         video.onwaiting = () => loader.style.display = 'block';
         video.onplaying = () => {
             loader.style.display = 'none';
-            // 再生開始時にミュート状態ならボタンを表示
             if (video.muted) {
                 unmuteOverlay.style.display = 'flex';
             }
         };
+
+        async function loadStream(url) {
+            loader.style.display = 'block';
+            if (Hls.isSupported()) {
+                if (hls) hls.destroy();
+                hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play().catch(() => loader.style.display = 'none');
+                });
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+                        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.play().catch(() => loader.style.display = 'none');
+            }
+        }
 
         (async () => {
             const id = new URLSearchParams(window.location.search).get('v');
@@ -58,48 +108,26 @@
             
             try {
                 loader.style.display = 'block';
-                // 新しいAPIエンドポイントへのfetchに変更
                 const res = await fetch(`/api/m3u8_proxy?v=${id}`);
                 const data = await res.json();
                 
                 if (data.success && data.m3u8_url) {
-                    const streamUrl = data.m3u8_url;
+                    // 画質メニュー生成
+                    qualityMenu.innerHTML = '';
+                    data.all_formats.forEach((fmt, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'quality-item' + (index === 0 ? ' active' : '');
+                        item.innerText = fmt.resolution;
+                        item.onclick = () => {
+                            document.querySelectorAll('.quality-item').forEach(el => el.classList.remove('active'));
+                            item.classList.add('active');
+                            loadStream(fmt.url);
+                        };
+                        qualityMenu.appendChild(item);
+                    });
 
-                    if (Hls.isSupported()) {
-                        const hls = new Hls();
-                        hls.loadSource(streamUrl);
-                        hls.attachMedia(video);
-                        hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                            video.play().catch(e => {
-                                console.log("Autoplay blocked. User interaction required.");
-                                loader.style.display = 'none';
-                            });
-                        });
-                        
-                        hls.on(Hls.Events.ERROR, function(event, data) {
-                            if (data.fatal) {
-                                switch (data.type) {
-                                    case Hls.ErrorTypes.NETWORK_ERROR:
-                                        hls.startLoad();
-                                        break;
-                                    case Hls.ErrorTypes.MEDIA_ERROR:
-                                        hls.recoverMediaError();
-                                        break;
-                                    default:
-                                        hls.destroy();
-                                        break;
-                                }
-                            }
-                        });
-                    } 
-                    else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                        // Safariなどのネイティブサポート用
-                        video.src = streamUrl;
-                        video.play().catch(e => {
-                            console.log("Autoplay blocked. User interaction required.");
-                            loader.style.display = 'none';
-                        });
-                    }
+                    // 初回読み込み（最高画質）
+                    loadStream(data.m3u8_url);
                 } else {
                     console.error("API error:", data.error);
                     loader.style.display = 'none';
