@@ -799,7 +799,7 @@ def m3u8_proxy():
         if res.status_code == 200:
             data = res.json()
             
-            # 形式: [{"resolution": "...", "format": "m3u8", "url": "..."}] のリストを取得
+            # 形式: [{"resolution": "...", "format": "...", "url": "..."}] のリストを取得
             formats = data if isinstance(data, list) else data.get('formats', [])
             
             if formats:
@@ -815,17 +815,19 @@ def m3u8_proxy():
                 
                 # 【修正箇所】リストの最初の要素（辞書）を取り出す
                 best_format = sorted_formats
+                
                 return jsonify({
                     "success": True,
                     "m3u8_url": best_format.get('url'),
                     "resolution": best_format.get('resolution'),
+                    "format": best_format.get('format', 'm3u8'),
                     "all_formats": sorted_formats
                 })
         
         return jsonify({"error": "m3u8 not found from new API"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-        
+
 @app.route('/subscribe.html')
 def subscribe():
     return render_template('subscribe.html')
