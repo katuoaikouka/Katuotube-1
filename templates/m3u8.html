@@ -111,7 +111,6 @@
                 if (data.success && data.m3u8_url) {
                     qualityMenu.innerHTML = '';
                     
-                    // 「自動 (最高画質)」項目を先頭に追加
                     const autoItem = document.createElement('div');
                     autoItem.className = 'quality-item active';
                     autoItem.innerText = `自動 (${data.resolution})`;
@@ -122,7 +121,6 @@
                     };
                     qualityMenu.appendChild(autoItem);
 
-                    // 個別画質リストの生成
                     data.all_formats.forEach((fmt) => {
                         const item = document.createElement('div');
                         item.className = 'quality-item';
