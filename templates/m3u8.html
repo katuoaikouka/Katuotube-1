@@ -54,14 +54,12 @@
 
         let hls = null;
 
-        // ミュート解除処理
         unmuteOverlay.onclick = (e) => {
             e.stopPropagation();
             video.muted = false;
             unmuteOverlay.style.display = 'none';
         };
 
-        // メニュー開閉
         settingsBtn.onclick = (e) => {
             e.stopPropagation();
             qualityMenu.style.display = qualityMenu.style.display === 'flex' ? 'none' : 'flex';
@@ -71,7 +69,6 @@
             qualityMenu.style.display = 'none';
         });
 
-        // イベントリスナー
         video.onwaiting = () => loader.style.display = 'block';
         video.onplaying = () => {
             loader.style.display = 'none';
@@ -112,12 +109,24 @@
                 const data = await res.json();
                 
                 if (data.success && data.m3u8_url) {
-                    // 画質メニュー生成
                     qualityMenu.innerHTML = '';
-                    data.all_formats.forEach((fmt, index) => {
+                    
+                    // 「自動 (最高画質)」項目を先頭に追加
+                    const autoItem = document.createElement('div');
+                    autoItem.className = 'quality-item active';
+                    autoItem.innerText = `自動 (${data.resolution})`;
+                    autoItem.onclick = () => {
+                        document.querySelectorAll('.quality-item').forEach(el => el.classList.remove('active'));
+                        autoItem.classList.add('active');
+                        loadStream(data.m3u8_url);
+                    };
+                    qualityMenu.appendChild(autoItem);
+
+                    // 個別画質リストの生成
+                    data.all_formats.forEach((fmt) => {
                         const item = document.createElement('div');
-                        item.className = 'quality-item' + (index === 0 ? ' active' : '');
-                        item.innerText = fmt.resolution;
+                        item.className = 'quality-item';
+                        item.innerText = fmt.resolution + (fmt.format ? ` (${fmt.format})` : '');
                         item.onclick = () => {
                             document.querySelectorAll('.quality-item').forEach(el => el.classList.remove('active'));
                             item.classList.add('active');
@@ -126,7 +135,6 @@
                         qualityMenu.appendChild(item);
                     });
 
-                    // 初回読み込み（最高画質）
                     loadStream(data.m3u8_url);
                 } else {
                     console.error("API error:", data.error);
