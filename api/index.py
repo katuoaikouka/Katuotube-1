@@ -813,7 +813,7 @@ def m3u8_proxy():
 
                 sorted_formats = sorted(formats, key=get_res_value, reverse=True)
                 
-                # 最高画質のフォーマットを取得
+                # 最高画質のフォーマットを取得 (インデックス0を指定)
                 best_format = sorted_formats
                 return jsonify({
                     "success": True,
