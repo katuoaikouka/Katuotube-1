@@ -794,13 +794,12 @@ def m3u8_proxy():
     NEW_M3U8_API = "https://meu8.vercel.app/m3u8/"
 
     try:
-        # 指定されたAPIからデータを取得
-        res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=3.0)
+        # 指定されたAPIからデータを取得 (タイムアウトを15秒に設定)
+        res = http_session.get(f"{NEW_M3U8_API}{video_id}", timeout=15.0)
         if res.status_code == 200:
             data = res.json()
             
-            # 形式: {"resolution": "1280x720", "format": "m3u8", "url": "..."} のリストを想定
-            # dataがリスト形式、あるいは 'formats' などのキーに入っている場合に対応
+            # 形式: [{"resolution": "...", "format": "m3u8", "url": "..."}] のリストを取得
             formats = data if isinstance(data, list) else data.get('formats', [])
             
             if formats:
@@ -814,6 +813,7 @@ def m3u8_proxy():
 
                 sorted_formats = sorted(formats, key=get_res_value, reverse=True)
                 
+                # 最高画質のフォーマットを取得
                 best_format = sorted_formats
                 return jsonify({
                     "success": True,
