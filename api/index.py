@@ -39,9 +39,16 @@ app.config['JSON_SORT_KEYS'] = False # [高速化] JSONのソートを無効化
 app.secret_key = os.environ.get('SESSION_SECRET', os.environ.get('SECRET_KEY', 'katuotube-key'))
 
 # セッション設定
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('RENDER', False) or os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+
+@app.after_request
+def after_request(response):
+    response.headers.remove('X-Frame-Options')
+    response.headers['X-Frame-Options'] = 'ALLOWALL'
+    response.headers['Content-Security-Policy'] = "frame-ancestors *; frame-src *;"
+    return response
 
 PASSWORD = os.environ.get('APP_PASSWORD', 'katuo')
 
@@ -505,7 +512,7 @@ def high_quality_watch():
         ]
         if v_streams:
             # fpsが高いものを優先
-            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)
+            v_stream = sorted(v_streams, key=lambda x: int(str(x.get("fps", 0))), reverse=True)[0]
             # 取得先を yudlp.vercel.app/stream/ に変更
             video_url = f"https://yudlp.vercel.app/stream/{v_id}?url={quote(v_stream.get('url'))}"
             found_video = True
@@ -515,7 +522,7 @@ def high_quality_watch():
     if not found_video:
         v_only = [f for f in adaptive if (f.get("height") or 0) > 0]
         if v_only:
-            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)
+            v_stream = sorted(v_only, key=lambda x: int(x.get("height", 0)), reverse=True)[0]
             video_url = f"https://yudlp.vercel.app/stream/{v_id}?url={quote(v_stream.get('url'))}"
 
     # 音声ストリームの選定: 音質が最も良い（ビットレートが高い）ものを優先
@@ -531,7 +538,7 @@ def high_quality_watch():
 
         a_stream_best = next((f for f in target_list if f.get("audioQuality") == "AUDIO_QUALITY_MEDIUM"), None)
         if not a_stream_best:
-            a_stream_best = sorted(target_list, key=lambda x: int(x.get("bitrate") or 0), reverse=True)
+            a_stream_best = sorted(target_list, key=lambda x: int(x.get("bitrate") or 0), reverse=True)[0]
         
         if a_stream_best and isinstance(a_stream_best, dict):
             # 取得先を yudlp.vercel.app/stream/ に変更
@@ -548,7 +555,7 @@ def high_quality_watch():
                 key=lambda x: int(x.get("resolution", "0x0").split("x")[-1] if "x" in x.get("resolution", "") else 0),
                 reverse=True
             )
-            m3u8_url = sorted_formats.get("url")
+            m3u8_url = sorted_formats[0].get("url")
     except Exception:
         m3u8_url = base_sources.get('m3u8')
 
@@ -731,8 +738,8 @@ def mix_stream():
         audio_only.sort(key=get_abr, reverse=True)
 
         res_data = {
-            'video_url': video_only['url'] if video_only else None,
-            'audio_url': audio_only['url'] if audio_only else None,
+            'video_url': video_only[0]['url'] if video_only else None,
+            'audio_url': audio_only[0]['url'] if audio_only else None,
         }
 
         # 映像が見つからない場合のフォールバック（通常の動画）
@@ -740,7 +747,7 @@ def mix_stream():
             combined = [f for f in formats if f.get('vcodec') != 'none']
             combined.sort(key=get_height, reverse=True)
             if combined:
-                res_data['video_url'] = combined['url']
+                res_data['video_url'] = combined[0]['url']
 
         return jsonify(res_data)
 
@@ -824,7 +831,7 @@ def m3u8_proxy():
                     final_url = high_url
                     final_res = "High Quality"
                 else:
-                    best_format = sorted_formats # リストの0番目を辞書として取得
+                    best_format = sorted_formats[0] # リストの0番目を辞書として取得
                     final_url = best_format.get('url')
                     final_res = best_format.get('resolution')
 
